@@ -6,6 +6,7 @@ import asyncio
 import json
 import sys
 import time
+from importlib import metadata
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -49,6 +50,16 @@ def _source_hashes(paths: Iterable[Path]) -> Dict[str, str]:
     return {str(path.relative_to(Path(__file__).resolve().parent)): sha256_file(path) for path in paths}
 
 
+def _dependency_versions() -> Dict[str, str]:
+    versions = {}
+    for package in ("httpx", "jsonschema", "language-tool-python", "spylls"):
+        try:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            versions[package] = "UNINSTALLED"
+    return versions
+
+
 def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[str, Any]) -> None:
     root = Path(__file__).resolve().parent
     if kind == "analysis":
@@ -66,7 +77,12 @@ def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[st
             root / "runner.py",
         ]
         system_prompt = SYSTEM_PROMPT_ELABORATION
-    resource_paths = [root / "docs" / name for name in ("pt_PT.dic", "pt_PT.aff", "pt_BR.dic", "pt_BR.aff")]
+    resource_paths = [
+        root / "docs" / name for name in ("pt_PT.dic", "pt_PT.aff", "pt_BR.dic", "pt_BR.aff")
+    ] + [
+        root / "models" / "model_quantized.ftz",
+        root / "data" / "wq_length_neutral_calibration.json",
+    ]
     manifest = build_manifest(
         out,
         kind=kind,
@@ -78,6 +94,7 @@ def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[st
             str(path.relative_to(root)): sha256_file(path) if path.is_file() else "UNAVAILABLE"
             for path in resource_paths
         },
+        dependency_versions=_dependency_versions(),
         parameters={
             **parameters,
             "system_prompt_sha256": sha256_bytes(system_prompt.encode("utf-8")),
@@ -132,6 +149,8 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         "failed_results": 0,
         "duplicate_result_ids": duplicate_ids,
         "unexpected_result_ids": unexpected_ids,
+        "requested_samples": len(truth_rows),
+        "attempted_samples": len(set(result_ids)),
     }
     checks = {k: [] for k in ["schema", "category", "urgency", "action", "sentiment", "language"]}
     f1s: List[float] = []
@@ -166,6 +185,15 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         "language_variant_acc_pct": pct(checks["language"]),
         "entity_f1": round(sum(f1s) / len(f1s), 4) if f1s else None,
         "missing_results": missing,
+        "denominators": {
+            "schema_validity_pct": len(checks["schema"]),
+            "category_acc_pct": len(checks["category"]),
+            "urgency_acc_pct": len(checks["urgency"]),
+            "action_req_acc_pct": len(checks["action"]),
+            "sentiment_acc_pct": len(checks["sentiment"]),
+            "language_variant_acc_pct": len(checks["language"]),
+            "entity_f1": len(f1s),
+        },
     })
     return metrics
 

@@ -9,7 +9,7 @@ from core.writing_quality import evaluate_writing_quality
 from core.scorecard import build_elaboration_scorecard, format_scorecard
 from runner import score_analysis
 from core.artifacts import ArtifactValidationError, build_manifest, load_manifest, validate_rows, write_manifest
-from compare import validate_comparison_artifacts
+from compare import validate_comparison_artifacts, _json_comparison
 
 
 def test_reference_rows_validate():
@@ -80,6 +80,25 @@ def test_cost_unknown_is_not_zero():
     s=build_elaboration_scorecard([{'latency_ms':10,'cost_usd':None,'prompt_tokens':1,'completion_tokens':1}])
     assert s['cost_per_1k_emails_usd'] is None
     assert s['unknown_cost_samples'] == 1
+
+
+def test_scorecard_reports_metric_denominators():
+    s = build_elaboration_scorecard([
+        {
+            'status': 'success', 'target_lang': 'pt-pt',
+            'instruction_adherence_pct': 80, 'semantic_preservation_pct': None,
+            'ptpt_compliance_pct': 90, 'ptbr_leakage_detected': False,
+            'wf_score': None, 'writing_quality_score': 70,
+            'latency_ms': 10,
+        },
+        {'status': 'error', 'error': 'failed'},
+    ])
+    assert s['requested_samples'] == 2
+    assert s['successful_samples'] == 1
+    assert s['denominators']['instruction_adherence_pct'] == 1
+    assert s['denominators']['semantic_preservation_pct'] == 0
+    assert s['denominators']['ptpt_compliance_pct'] == 1
+    assert 'semantic_preservation_pct' in s['unavailable_metrics']
 
 
 def test_provider_reported_cost_is_used_when_catalog_cost_is_unknown():
@@ -240,3 +259,19 @@ def test_compare_requires_explicit_legacy_mode(tmp_path):
         raise AssertionError('legacy artifact was accepted without an explicit flag')
     metadata = validate_comparison_artifacts([result_path], kind='generation', allow_legacy=True)
     assert metadata[0]['legacy'] is True
+
+
+def test_json_comparison_is_one_structured_document(tmp_path):
+    first = {'artifact_provenance': 'manifest-backed', 'instruction_adherence_pct': 70}
+    second = {'artifact_provenance': 'manifest-backed', 'instruction_adherence_pct': 80}
+    first_path = tmp_path / 'first.jsonl'
+    second_path = tmp_path / 'second.jsonl'
+    first_path.write_text('{"model":"model-a"}\n', encoding='utf-8')
+    second_path.write_text('{"model":"model-b"}\n', encoding='utf-8')
+    report = _json_comparison(
+        [first_path, second_path],
+        [first, second],
+        'generation',
+    )
+    assert len(report['artifacts']) == 2
+    assert report['delta']['values']['instruction_adherence_pct'] == 10

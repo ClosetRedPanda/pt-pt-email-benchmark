@@ -37,18 +37,24 @@ Known limitations:
 - Normal `compare.py` runs use stored artifact metrics only.
 - Legacy recomputation is explicit through `--rescore`.
 - Generic placeholder detection and Markdown-link exclusions have regression tests.
-- The benchmark-local test suite currently contains 18 passing tests.
+- Result rows are validated for identity, status, numeric values, and expected task IDs.
+- Manifest-backed artifacts bind result hashes to benchmark inputs, evaluator source,
+  optional resources, and installed dependency versions.
+- Scorecards expose metric-specific denominators and explicitly list unavailable metrics.
 
 ### Still unsafe or incomplete
 
 - Existing `v2` artifacts are legacy artifacts and were not created with the current evaluator contract.
-- `--rescore` recomputes fields in memory but does not create a provenance manifest or a new immutable artifact.
-- There is no strict result-artifact schema or manifest containing hashes, dependency versions, and resource hashes.
-- Reports do not show metric-specific denominators for adherence, semantic preservation, dialect, or WQ averages.
+- `--rescore` is exploratory; use `tools/rescore_artifact.py` to persist a new
+	manifest-backed artifact.
+- Existing `v2` artifacts remain legacy artifacts without manifests.
+- A manifest records package versions, but external service behavior and provider
+	model revisions remain outside local control.
 - There is no paired comparison, confidence interval, or uncertainty estimate.
 - The WQ calibration is not demonstrated to have independent multi-rater reliability.
 - Instruction and semantic checks remain regex/pattern-based proxies.
-- The current package has no formal versioned result schema or refusal of mixed evaluator versions.
+- The result validator and manifest are versioned, but the row contract is not yet
+	a complete formal schema for every optional provider field.
 
 ## Priority 1: Freeze Reproducibility
 

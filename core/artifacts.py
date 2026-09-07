@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 
 ARTIFACT_SCHEMA_VERSION = "1.0"
-MANIFEST_VERSION = "1.0"
+MANIFEST_VERSION = "1.1"
 _NUMERIC_FIELDS = {
     "latency_ms", "prompt_tokens", "completion_tokens", "reasoning_tokens",
     "total_tokens", "cost_usd", "instruction_adherence_pct",
@@ -117,6 +117,7 @@ def build_manifest(
     input_hashes: Optional[Dict[str, str]] = None,
     evaluator_versions: Optional[Dict[str, str]] = None,
     resource_hashes: Optional[Dict[str, str]] = None,
+    dependency_versions: Optional[Dict[str, str]] = None,
     parameters: Optional[Dict[str, Any]] = None,
     command: Optional[List[str]] = None,
     created_at: Optional[str] = None,
@@ -139,6 +140,7 @@ def build_manifest(
         "input_hashes": input_hashes or {},
         "evaluator_versions": evaluator_versions or {},
         "resource_hashes": resource_hashes or {},
+        "dependency_versions": dependency_versions or {},
         "parameters": parameters or {},
         "command": command or [],
     }
@@ -164,7 +166,10 @@ def load_manifest(result_path: Path) -> Dict[str, Any]:
         raise ArtifactValidationError(f"invalid manifest JSON: {path}: {exc}") from exc
     if not isinstance(value, dict):
         raise ArtifactValidationError(f"manifest must be an object: {path}")
-    required = {"manifest_version", "artifact_schema_version", "artifact_kind", "result_sha256", "row_count"}
+    required = {
+        "manifest_version", "artifact_schema_version", "artifact_kind",
+        "result_sha256", "row_count", "dependency_versions",
+    }
     missing = sorted(required - set(value))
     if missing:
         raise ArtifactValidationError(f"manifest missing fields: {missing}")

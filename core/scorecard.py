@@ -132,9 +132,16 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     adh = [r.get("instruction_adherence_pct") for r in successful if r.get("instruction_adherence_pct") is not None]
     sem = [r.get("semantic_preservation_pct") for r in successful if r.get("semantic_preservation_pct") is not None]
     wq = [r.get("writing_quality_score") for r in successful if r.get("writing_quality_score") is not None]
+    writing_details = [r.get("writing_quality") or {} for r in successful]
+    grammar = [d.get("grammar_error_count") for d in writing_details if d.get("grammar_error_count") is not None]
+    spelling = [d.get("spelling_error_count") for d in writing_details if d.get("spelling_error_count") is not None]
+    repetition = [d.get("repetition_count") for d in writing_details if d.get("repetition_count") is not None]
+    structural = [d.get("structural_issue_count") for d in writing_details if d.get("structural_issue_count") is not None]
 
     return {
         "samples": len(records),
+        "requested_samples": len(records),
+        "attempted_samples": len(records),
         "successful_samples": len(successful),
         "failed_samples": len(records) - len(successful),
         "ptpt_samples": len(ptpt),
@@ -145,6 +152,10 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "ptbr_leakage_pct": (sum(bool(v) for v in leakage_flags) / len(leakage_flags) * 100.0) if leakage_flags else None,
         "wf_score": _mean(wf_vals),
         "local_writing_quality": _mean(wq),
+        "avg_grammar_errors_per_email": _mean(grammar),
+        "avg_spelling_errors_per_email": _mean(spelling),
+        "structural_failures_pct": (sum(value > 0 for value in structural) / len(structural) * 100.0) if structural else None,
+        "repetition_pct": (sum(value > 0 for value in repetition) / len(repetition) * 100.0) if repetition else None,
         "latency_p50_ms": _percentile(latencies, 50),
         "latency_p90_ms": _percentile(latencies, 90),
         "latency_p95_ms": _percentile(latencies, 95),
@@ -156,6 +167,32 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "completion_tokens": completion_tokens,
         "total_cost_usd": total_cost,
         "unknown_cost_samples": unknown_cost_count,
+        "denominators": {
+            "instruction_adherence_pct": len(adh),
+            "semantic_preservation_pct": len(sem),
+            "euptvid_probability": len(euptvid),
+            "ptpt_compliance_pct": len(comp),
+            "ptbr_leakage_pct": len(leakage_flags),
+            "wf_score": len(wf_vals),
+            "local_writing_quality": len(wq),
+            "grammar_errors_per_email": len(grammar),
+            "spelling_errors_per_email": len(spelling),
+            "structural_failures_pct": len(structural),
+            "repetition_pct": len(repetition),
+            "latency_ms": len(latencies),
+            "cost_usd": len(known_costs),
+        },
+        "unavailable_metrics": sorted({
+            metric for metric, count in {
+                "instruction_adherence_pct": len(adh),
+                "semantic_preservation_pct": len(sem),
+                "euptvid_probability": len(euptvid),
+                "ptpt_compliance_pct": len(comp),
+                "ptbr_leakage_pct": len(leakage_flags),
+                "wf_score": len(wf_vals),
+                "local_writing_quality": len(wq),
+            }.items() if count == 0
+        }),
     }
 
 

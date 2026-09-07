@@ -4,6 +4,7 @@ compare.py
 config.py
 core/__init__.py
 core/api_client.py
+core/artifacts.py
 core/generation_evaluator.py
 core/languagetool_local.py
 core/pt_dialect.py
@@ -23,6 +24,7 @@ data/wq_length_neutral_calibration.json
 data/wq_rater_agreement_log.jsonl
 dics/README.md
 docs/DESIGN.md
+docs/TRUSTWORTHINESS_ROADMAP.md
 docs/VALIDATION.md
 models/README.md
 pyproject.toml
@@ -35,4 +37,5 @@ tools/prepare_wq_rater_overlap.py
 tools/review_wq_calibration.py
 tools/review_wq_rater_overlap.py
 tools/validate_human_wq_review.py
+tools/rescore_artifact.py
 validate.py

@@ -152,7 +152,7 @@ def validate_comparison_artifacts(
             raise ArtifactValidationError("cannot mix manifest-backed and legacy artifacts")
         comparable_fields = (
             "artifact_schema_version", "benchmark_version", "input_hashes",
-            "evaluator_versions", "resource_hashes",
+            "evaluator_versions", "resource_hashes", "dependency_versions",
         )
         for field in comparable_fields:
             values = {json.dumps(item.get(field), sort_keys=True) for item in versioned}
@@ -227,6 +227,11 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
         "-" * 72,
         *_render_sections(sections),
     ]
+    denominators = summary.get("denominators") or {}
+    if denominators:
+        lines.extend(["", "  Metric denominators: " + ", ".join(
+            f"{key}={value}" for key, value in sorted(denominators.items())
+        )])
     if kind == "generation":
         dialect_statuses = {
             str((row.get("dialect_evaluation") or {}).get("language_adherence_status"))
@@ -242,6 +247,42 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
                 "  because docs/pt_PT.dic and docs/pt_PT.aff are missing.",
             ])
     return "\n".join(lines)
+
+
+def _json_comparison(paths: List[Path], summaries: List[Dict[str, Any]], kind: str) -> Dict[str, Any]:
+    """Return one machine-readable document for all compared artifacts."""
+    artifacts = []
+    for path, summary in zip(paths, summaries):
+        model_names = sorted({str(row["model"]) for row in read_jsonl(path) if row.get("model")})
+        artifacts.append({
+            "artifact": path.name,
+            "model": ", ".join(model_names) if model_names else "unknown model",
+            "summary": summary,
+        })
+
+    metric_keys = (
+        "instruction_adherence_pct", "semantic_preservation_pct",
+        "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct",
+        "wf_score", "local_writing_quality", "latency_p50_ms",
+        "latency_p90_ms", "throughput_emails_per_min", "tokens_per_second",
+        "cost_per_1k_emails_usd",
+    )
+    deltas = {}
+    if len(summaries) == 2:
+        left, right = summaries
+        for key in metric_keys:
+            if left.get(key) is not None and right.get(key) is not None:
+                deltas[key] = right[key] - left[key]
+
+    return {
+        "kind": kind,
+        "artifact_provenance": sorted({item["summary"].get("artifact_provenance", "unknown") for item in artifacts}),
+        "artifacts": artifacts,
+        "delta": {
+            "definition": "second artifact minus first artifact",
+            "values": deltas,
+        },
+    }
 
 
 def main() -> None:
@@ -270,6 +311,7 @@ def main() -> None:
         kind=args.kind,
         allow_legacy=args.allow_legacy or args.rescore,
     )
+    summaries = []
     if args.kind == "generation":
         for path, manifest in zip(args.results, manifests):
             rows = read_jsonl(path)
@@ -281,13 +323,24 @@ def main() -> None:
                 else "legacy exploratory" if manifest.get("legacy")
                 else "manifest-backed"
             )
-            print(json.dumps(summary, ensure_ascii=False, sort_keys=True) if args.json else _pretty_report(path, summary, args.kind))
+            summaries.append(summary)
+            if not args.json:
+                print(_pretty_report(path, summary, args.kind))
     else:
         truth = read_jsonl(ANALYSIS_REFERENCE)
         for path, manifest in zip(args.results, manifests):
             summary = score_analysis(truth, read_jsonl(path))
             summary["artifact_provenance"] = "legacy exploratory" if manifest.get("legacy") else "manifest-backed"
-            print(json.dumps(summary, ensure_ascii=False, sort_keys=True) if args.json else _pretty_report(path, summary, args.kind))
+            summaries.append(summary)
+            if not args.json:
+                print(_pretty_report(path, summary, args.kind))
+    if args.json:
+        print(json.dumps(
+            _json_comparison(args.results, summaries, args.kind),
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+        ))
 
 
 if __name__ == "__main__":
