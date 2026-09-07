@@ -144,15 +144,15 @@ _DIM_CAPS: Dict[str, float] = {
     "style": 18.0,
 }
 
-# Leading fixture metadata only. Candidate output is not stripped with this.
+# RFC 5322 structural header line (e.g. "Header-Field: value")
 _FIXTURE_HEADER_LINE_RE = re.compile(
-    r"^(De|Para|Assunto|Data|From|To|Subject|Date|Cc|Bcc)\s*:",
+    r"^[A-Za-z][A-Za-z0-9-]{1,50}\s*:",
     re.IGNORECASE,
 )
 
-# Candidate emails may render headers in Markdown (e.g. **Assunto:** ...).
+# Candidate emails may render headers in Markdown (e.g. **Subject:** ...).
 _EMAIL_HEADER_LINE_RE = re.compile(
-    r"^\s*(?:[*_~`]{1,3})?(De|Para|Assunto|Data|From|To|Subject|Date|Cc|Bcc)\s*:(?:[*_~`]{1,3})?\s*.*$",
+    r"^\s*(?:[*_~`]{1,3})?[A-Za-z][A-Za-z0-9-]{1,50}\s*:(?:[*_~`]{1,3})?\s*.*$",
     re.IGNORECASE,
 )
 _EMAIL_ADDRESS_RE = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
@@ -169,14 +169,12 @@ def _is_dialect_issue(msg: str, rule_id: str, rule_desc: str, category_id: str =
     Returns True if the LanguageTool match represents a dialect/regionalism
     difference (PT-BR vs PT-PT) rather than a genuine writing quality issue.
 
-    Mirrors the identical guard in pt_dialect.py so that dialect leaks are
-    never counted in two separate metric dimensions.
+    Uses LanguageTool's native structural category/rule taxonomy.
     """
-    if str(category_id).upper() == "REGIONALISMS":
-        return True
-    keywords = ("brasil", "pt_br", "pt-br", "brazilian", "regional", "dialect")
-    combined = f"{msg} {rule_id} {rule_desc}".lower()
-    return any(k in combined for k in keywords)
+    del msg, rule_desc
+    cid = str(category_id).upper()
+    rid = str(rule_id).upper()
+    return cid == "REGIONALISMS" or rid.startswith("PT_BR") or rid.startswith("PT_BRASIL")
 
 
 def _protected_spans(text: str) -> List[Tuple[int, int]]:
@@ -219,7 +217,6 @@ def _is_probable_signoff_block(text: str) -> bool:
     has_contact = bool(
         _EMAIL_ADDRESS_RE.search(compact) or
         _URL_RE.search(compact) or
-        re.search(r"(?i)\b(?:tel|telefone|telemóvel|telemovel|tlf|fax)\.?\s*[:+]?", compact) or
         re.search(r"\+?\d[\d .:/()\-]{6,}", compact)
     )
     has_farewell_shape = len(lines) <= 3 and bool(re.search(r"[,;:]$", lines[0]))
@@ -982,20 +979,10 @@ def detect_style_issues(text: str) -> List[Dict[str, Any]]:
 
     # --- 4. Intra-word apostrophes (register / contraction shape) ---
     apostrophe_tokens = _INTERNAL_APOSTROPHE_RE.findall(text)
-    # Ordinary English contractions are standard professional writing and must
-    # not be treated as an automatic style defect. Retain the detector for
-    # unusual/unknown contractions and colloquial elisions.
-    common_contractions = {
-        "I'm", "I'm", "I've", "I'll", "I'd", "you're", "youre", "you've",
-        "you'll", "you'd", "he's", "he'll", "he'd", "she's", "she'll",
-        "she'd", "it's", "it'll", "we're", "we've", "we'll", "we'd",
-        "they're", "they've", "they'll", "they'd", "can't", "couldn't",
-        "shouldn't", "wouldn't", "won't", "don't", "doesn't", "didn't",
-        "isn't", "aren't", "wasn't", "weren't", "haven't", "hasn't",
-        "hadn't", "mustn't", "needn't", "let's", "that's", "who's",
-        "what's", "there's", "here's", "where's", "why's", "how's",
-    }
-    unusual = [t for t in apostrophe_tokens if t not in common_contractions and t.lower() not in {c.lower() for c in common_contractions}]
+    # Standard contraction morphological suffix pattern (e.g. word'm, word're, word've, word'll, word'd, word't, word's)
+    # This checks linguistic structural formation without enumerating a dictionary of words.
+    standard_contraction_shape = re.compile(r"^[A-Za-z]+['’](?:m|re|ve|ll|d|t|s)$", re.IGNORECASE)
+    unusual = [t for t in apostrophe_tokens if not standard_contraction_shape.match(t)]
     if len(unusual) > 1:
         issues.append({
             "source": "Style Detector",

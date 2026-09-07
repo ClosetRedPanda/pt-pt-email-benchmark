@@ -270,7 +270,7 @@ class OpenRouterClient:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/openrouter-benchmark",
+            "HTTP-Referer": "https://github.com/ClosetRedPanda/PTbenchmark",
             "X-Title": "Mass-Email-Benchmark-Engine-v3"
         }
 

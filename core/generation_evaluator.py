@@ -8,25 +8,20 @@ Evaluates model-generated email responses across:
 import re
 from typing import Dict, Any, List, Optional, Tuple
 
-# Template slots are inferred from the actual source prompt, not a hardcoded
-# list of words such as "Name", "Date", or "Company". A generated bracketed
-# value is only a defect when that exact slot existed in the source prompt and
-# was reproduced verbatim in the output.
+# Template slots are inferred structurally without hardcoding word lists:
+# 1. Verbatim slots reproduced from the prompt ([...])
+# 2. Structural slot syntax: [X...], [___...], [...], [ALL_CAPS], or [Title Case Slot] (e.g. [Seu Nome], [Nome])
 _SOURCE_SLOT_RE = re.compile(r"\[[^\]\n]{1,200}\]", re.UNICODE)
-_GENERIC_PLACEHOLDER_RE = re.compile(
-    r"\[(?:[^\]\n]*(?:nome|name|empresa|company|cargo|função|funcao|title|role|"
-    r"contacto|contato|contact|email|telefone|phone|endereço|endereco|address|"
-    r"inserir|insert|preencher|fill|número|numero|number|data|date|produto|product|"
-    r"documento|document|cliente|client|destinatário|destinatario|recipient|"
-    r"suporte|support|website|site)[^\]\n]*|[Xx_][Xx0-9_ .-]{2,})\]",
-    re.IGNORECASE | re.UNICODE,
+_STRUCTURAL_SLOT_RE = re.compile(
+    r"\[(?:\s*[_Xx.-]{2,}\s*|\.{3,}|_{2,}|(?:[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ0-9_-]*\s*)+)\]",
+    re.UNICODE,
 )
 
 
 def _bracketed_placeholders(text: str) -> List[str]:
     found = []
     seen = set()
-    for match in _GENERIC_PLACEHOLDER_RE.finditer(text or ""):
+    for match in _STRUCTURAL_SLOT_RE.finditer(text or ""):
         end = match.end()
         if end < len(text) and text[end] == "(":
             continue

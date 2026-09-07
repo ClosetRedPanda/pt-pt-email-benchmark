@@ -144,23 +144,21 @@ def get_ptbr_dictionary():
     return _HUNSPELL_PTBR if _HUNSPELL_PTBR is not False else None
 
 
-# Regex rules for Brazilian grammar patterns in PT-PT context
-REGEX_GERUND_BR = re.compile(
-    r'\b(estou|está|estamos|estão|estava|estavam|ficamos|fica|ficou|continuo|continua|permanece|permanecem|veio|vem|estarei|estaremos)\s+([a-z]+ndo)\b',
-    re.IGNORECASE
-)
-REGEX_PROCLISIS_START = re.compile(
-    r'(?:^|[.!?]\s+)\b(me|te|nos|lhe|lhes)\s+([a-z]+(?:ou|ei|em|a|e|am|iram|ará))\b',
-    re.IGNORECASE
-)
-REGEX_TER_HAVER = re.compile(
-    r'(?:^|[.!?]\s+)\b(tem|tinha|tinham)\s+(?:muitos|muitas|vários|várias|bastantes|alguns|algumas|demasiados)\s+([a-z]+)\b',
-    re.IGNORECASE
-)
-REGEX_PARA_MIM_VERBO = re.compile(
-    r'\bpara\s+mim\s+([a-z]+(?:ar|er|ir))\b',
-    re.IGNORECASE
-)
+# --------------------------------------------------------------------------- #
+# NLP & Linguistic Dialect Analyzers (spaCy pt_core_news_sm)
+# Zero hardcoded dictionaries, word arrays, or keyword lists.
+# --------------------------------------------------------------------------- #
+
+_SPACY_NLP = None
+
+def get_spacy_nlp():
+    """Lazy-load the spaCy Portuguese linguistic pipeline (singleton)."""
+    global _SPACY_NLP
+    if _SPACY_NLP is None:
+        import spacy
+        # Only tagger, morphologizer, and parser are needed; disable NER for speed
+        _SPACY_NLP = spacy.load("pt_core_news_sm", disable=["ner"])
+    return _SPACY_NLP
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +170,7 @@ def check_languagetool_api(text: str, timeout: int = 10) -> Tuple[bool, List[Dic
 
     The historical function name is retained so persisted manifests and callers
     remain compatible, but it no longer performs any HTTP request itself.
+    Uses LanguageTool's native structural category taxonomy (no keyword scanning).
     """
     del timeout
     ok, raw_issues, used = check_local_languagetool(text, LANGUAGETOOL_LANG)
@@ -187,13 +186,10 @@ def check_languagetool_api(text: str, timeout: int = 10) -> Tuple[bool, List[Dic
             continue
         msg = issue.get("message", "")
         rule_id = issue.get("rule_id", "")
-        rule_desc = issue.get("rule_description", "")
         category_id = str(issue.get("category_id", "")).upper()
-        explicit_ptbr_signal = any(
-            k in str(msg).lower() or k in str(rule_id).lower() or k in str(rule_desc).lower()
-            for k in ["brasil", "pt_br", "pt-br", "brazilian"]
-        )
-        if explicit_ptbr_signal:
+        
+        # Native LanguageTool taxonomy for dialect/regionalism issues
+        if category_id == "REGIONALISMS" or rule_id.startswith("PT_BR") or rule_id.startswith("PT_BRASIL"):
             issues.append({
                 "source": "LanguageTool (local, pt-PT ruleset)",
                 "rule_id": rule_id,
@@ -201,7 +197,7 @@ def check_languagetool_api(text: str, timeout: int = 10) -> Tuple[bool, List[Dic
                 "context": issue.get("context", ""),
                 "replacements": issue.get("replacements", []),
                 "severity": "high",
-                "evidence_type": "languagetool_regionalism" if category_id == "REGIONALISMS" else "languagetool_text_signal",
+                "evidence_type": "languagetool_regionalism",
                 "validated": True,
                 "score_eligible": True,
             })
@@ -245,69 +241,105 @@ def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
 
 def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
     """
-    Deterministic rule checker for Brazilian grammar patterns in European Portuguese context.
+    Linguistic grammar checker for Brazilian grammar patterns in European Portuguese context.
+    Uses spaCy POS tagging, morphological features, and dependency parsing.
+    Zero hardcoded dictionaries or word lists.
     """
+    if not text or not text.strip():
+        return []
+
+    nlp = get_spacy_nlp()
+    doc = nlp(text)
     issues = []
 
-    # 1. Brazilian Gerund syntax check ("estou fazendo" vs "estou a fazer")
-    for match in REGEX_GERUND_BR.finditer(text):
-        aux, gerund = match.groups()
-        context = match.group(0)
-        issues.append({
-            "source": "Grammar Ruleset",
-            "rule_id": "PTBR_GERUND_OVERUSE",
-            "message": f"Detected Brazilian gerund construction '{context}'. In European Portuguese (PT-PT), preference is 'a + infinitive' (e.g., '{aux} a ...').",
-            "context": context,
-            "replacements": [f"{aux} a ..."],
-            "severity": "medium",
-            "evidence_type": "grammar_rule",
-            "validated": True,
-        })
+    # 1. Continuous Gerund syntax check (Auxiliary/Verb + Gerund vs PT-PT "a + infinitive")
+    for i, token in enumerate(doc):
+        if "VerbForm=Ger" in str(token.morph):
+            # Check if preceded by an auxiliary or verbal head in the same clause
+            for prev in reversed(list(doc[:i])):
+                if prev.is_punct or prev.text in (".", "!", "?", ";", "\n"):
+                    break
+                if prev.pos_ in ("VERB", "AUX"):
+                    context = f"{prev.text} {token.text}"
+                    issues.append({
+                        "source": "Linguistic Grammar Ruleset (spaCy)",
+                        "rule_id": "PTBR_GERUND_OVERUSE",
+                        "message": f"Detected Brazilian continuous gerund construction '{context}'. In European Portuguese (PT-PT), preference is 'a + infinitive' (e.g., '{prev.text} a ...').",
+                        "context": context,
+                        "replacements": [f"{prev.text} a ..."],
+                        "severity": "medium",
+                        "evidence_type": "grammar_rule",
+                        "validated": True,
+                    })
+                    break
 
-    # 2. Brazilian Proclisis at sentence start ("me diga", "te mandei")
-    for match in REGEX_PROCLISIS_START.finditer(text):
-        pronoun, verb = match.groups()
-        context = match.group(0).strip()
-        issues.append({
-            "source": "Grammar Ruleset",
-            "rule_id": "PTBR_PROCLISIS_START",
-            "message": f"Detected proclisis pronoun placement at start of sentence '{context}'. European Portuguese prefers enclisis (e.g., '{verb}-{pronoun}').",
-            "context": context,
-            "replacements": [f"{verb}-{pronoun}"],
-            "severity": "medium",
-            "evidence_type": "grammar_rule",
-            "validated": True,
-        })
+    # 2. Brazilian Proclisis at sentence/clause start (clitic pronoun preceding verb)
+    for sent in doc.sents:
+        # Find first non-punctuation token
+        first_token = None
+        for t in sent:
+            if not t.is_punct and not t.is_space:
+                first_token = t
+                break
+        if first_token and "-" not in first_token.text:
+            # Clitic pronouns in Portuguese cannot serve as nominative subjects (Case=Nom).
+            # When an oblique clitic pronoun (Case=Acc/Dat or dep in obj/iobj/expl) precedes
+            # a verb at sentence start, it is a proclisis construction.
+            is_clitic = (
+                first_token.dep_ in ("obj", "iobj", "expl") or
+                any(c in first_token.morph.get("Case") for c in ("Acc", "Dat"))
+            ) and "Nom" not in first_token.morph.get("Case")
 
-    # 3. Brazilian "Ter" used for existential "Haver" ("Tem muitos clientes" vs "Há muitos clientes")
-    for match in REGEX_TER_HAVER.finditer(text):
-        verb, noun = match.groups()
-        context = match.group(0).strip()
-        issues.append({
-            "source": "Grammar Ruleset",
-            "rule_id": "PTBR_TER_HAVER",
-            "message": f"Detected existential 'ter' in '{context}'. In European Portuguese (PT-PT), use 'haver' (e.g., 'Há {noun}').",
-            "context": context,
-            "replacements": [f"Há {noun}"],
-            "severity": "medium",
-            "evidence_type": "grammar_rule",
-            "validated": True,
-        })
+            if is_clitic and first_token.i + 1 < len(doc):
+                next_t = doc[first_token.i + 1]
+                if next_t.pos_ in ("VERB", "AUX"):
+                    context = f"{first_token.text} {next_t.text}"
+                    issues.append({
+                        "source": "Linguistic Grammar Ruleset (spaCy)",
+                        "rule_id": "PTBR_PROCLISIS_START",
+                        "message": f"Detected proclisis pronoun placement at start of sentence '{context}'. European Portuguese prefers enclisis (e.g., '{next_t.text}-{first_token.text.lower()}').",
+                        "context": context,
+                        "replacements": [f"{next_t.text}-{first_token.text.lower()}"],
+                        "severity": "medium",
+                        "evidence_type": "grammar_rule",
+                        "validated": True,
+                    })
 
-    # 4. Brazilian "Para mim fazer"
-    for match in REGEX_PARA_MIM_VERBO.finditer(text):
-        infinitive = match.group(1)
-        context = match.group(0).strip()
-        issues.append({
-            "source": "Grammar Ruleset",
-            "rule_id": "PTBR_PARA_MIM_VERBO",
-            "message": f"Detected '{context}'. In Portuguese, personal pronouns as subject of infinitive take 'eu' ('para eu {infinitive}').",
-            "context": context,
-            "replacements": [f"para eu {infinitive}"],
-            "severity": "high",
-            "evidence_type": "grammar_rule",
-            "validated": True,
-        })
+    # 3. Brazilian "Ter" used for existential "Haver" (Subjectless transitive 'ter')
+    for token in doc:
+        if token.lemma_ == "ter" and token.pos_ in ("VERB", "AUX"):
+            has_explicit_nsubj = any(c.dep_ in ("nsubj", "nsubj:pass") for c in token.children)
+            has_obj = any(c.dep_ in ("obj", "obl") for c in token.children)
+            if not has_explicit_nsubj and has_obj:
+                context = token.text
+                issues.append({
+                    "source": "Linguistic Grammar Ruleset (spaCy)",
+                    "rule_id": "PTBR_TER_HAVER",
+                    "message": f"Detected existential 'ter' in '{context}'. In European Portuguese (PT-PT), use 'haver' (e.g., 'Há...').",
+                    "context": context,
+                    "replacements": ["Há ..."],
+                    "severity": "medium",
+                    "evidence_type": "grammar_rule",
+                    "validated": True,
+                })
+
+    # 4. Brazilian "Para mim" + Infinitive verb
+    for i, token in enumerate(doc):
+        if token.lemma_ == "mim" and token.pos_ == "PRON":
+            prev_t = doc[i - 1] if i > 0 else None
+            next_t = doc[i + 1] if i + 1 < len(doc) else None
+            if prev_t and prev_t.lemma_ == "para" and next_t and "VerbForm=Inf" in str(next_t.morph):
+                context = f"{prev_t.text} {token.text} {next_t.text}"
+                issues.append({
+                    "source": "Linguistic Grammar Ruleset (spaCy)",
+                    "rule_id": "PTBR_PARA_MIM_VERBO",
+                    "message": f"Detected '{context}'. In Portuguese, personal pronouns as subject of infinitive take 'eu' ('para eu {next_t.text}').",
+                    "context": context,
+                    "replacements": [f"para eu {next_t.text}"],
+                    "severity": "high",
+                    "evidence_type": "grammar_rule",
+                    "validated": True,
+                })
 
     return issues
 
