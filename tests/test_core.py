@@ -1,9 +1,10 @@
 import json
+import re
 from pathlib import Path
 from config import ANALYSIS_REFERENCE, ELABORATION_CONSTRAINTS
 from core.generation_evaluator import evaluate_generation_output, load_constraint_map
 from core.schemas import EMAIL_ANALYSIS_SCHEMA, validate_email_analysis
-from core.pt_dialect import evaluate_pt_dialect
+from core.pt_dialect import evaluate_pt_dialect, check_lexical_contrasts
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
 from core.scorecard import build_elaboration_scorecard, format_scorecard
@@ -87,6 +88,45 @@ def test_dialect_outputs_separate_signals():
     assert 'ptbr_leakage_detected' in d
     assert 'euptvid_prob' in d
 
+
+
+def test_lexical_contrasts_mask_structured_nonlexical_spans(monkeypatch):
+    import core.pt_dialect as pt_dialect
+
+    class LookupSpy:
+        def __init__(self, dictionary):
+            self.dictionary = dictionary
+            self.lookups = []
+
+        def lookup(self, word):
+            self.lookups.append(word)
+            return self.dictionary.lookup(word)
+
+    ptbr = pt_dialect.get_ptbr_dictionary()
+    ptpt = pt_dialect.get_ptpt_dictionary()
+    if ptbr is None or ptpt is None:
+        return
+
+    ptbr_spy = LookupSpy(ptbr)
+    ptpt_spy = LookupSpy(ptpt)
+    monkeypatch.setattr(pt_dialect, "_HUNSPELL_PTBR", ptbr_spy)
+    monkeypatch.setattr(pt_dialect, "_HUNSPELL_PTPT", ptpt_spy)
+
+    text = "Antes https://example.com/path depois support@example.org fim."
+    check_lexical_contrasts(text)
+
+    protected_fragments = {
+        fragment.lower()
+        for token in pt_dialect.get_spacy_nlp()(text)
+        if token.like_url or token.like_email
+        for fragment in re.findall(
+            r"\b[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’\-][A-Za-zÀ-ÖØ-öø-ÿ]+)*\b",
+            token.text,
+            re.UNICODE,
+        )
+    }
+    assert protected_fragments.isdisjoint(ptbr_spy.lookups)
+    assert protected_fragments.isdisjoint(ptpt_spy.lookups)
 
 def test_wf_does_not_depend_on_classifier_probability():
     d={'pt_dialect_score': 0.01, 'violations': [], 'ptpt_compliance_pct': 100, 'ptbr_leakage_detected': False}

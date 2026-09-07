@@ -204,6 +204,41 @@ def check_languagetool_api(text: str, timeout: int = 10) -> Tuple[bool, List[Dic
     return ok, issues, used
 
 
+_URI_SCHEME_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*(?=://)", re.UNICODE)
+
+def _mask_nonlexical_spans(text: str) -> str:
+    """Mask syntax-identifiable non-prose spans before lexical lookup.
+
+    This helper deliberately contains no vocabulary, acronym list, or
+    word-level exception list. Non-lexical spans are identified by syntax
+    (spaCy URL/email token attributes and generic URI-scheme syntax).
+    """
+    doc = get_spacy_nlp()(text)
+    spans = [
+        (token.idx, token.idx + len(token.text))
+        for token in doc
+        if token.like_url or token.like_email
+    ]
+    spans.extend((match.start(), match.end()) for match in _URI_SCHEME_RE.finditer(text))
+
+    if not spans:
+        return text
+
+    spans.sort()
+    merged = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+
+    chars = list(text)
+    for start, end in merged:
+        for index in range(start, end):
+            if chars[index] != "\n":
+                chars[index] = " "
+    return "".join(chars)
+
 def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
     """Find lexical items recognized by pt_BR but not pt_PT using bundled dictionaries.
 
@@ -218,7 +253,8 @@ def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
 
     issues: List[Dict[str, Any]] = []
     seen = set()
-    for token in re.findall(r"\b[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’\-][A-Za-zÀ-ÖØ-öø-ÿ]+)*\b", text, re.UNICODE):
+    lexical_text = _mask_nonlexical_spans(text)
+    for token in re.findall(r"\b[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’\-][A-Za-zÀ-ÖØ-öø-ÿ]+)*\b", lexical_text, re.UNICODE):
         normalized = token.strip("-'’").lower()
         if len(normalized) < 3 or normalized in seen:
             continue
