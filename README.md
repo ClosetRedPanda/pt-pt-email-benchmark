@@ -1,10 +1,23 @@
-# Lean PT-PT Email LLM Benchmark
+# PT-PT Email LLM Benchmark
 
-A deliberately small, auditable benchmark for Portuguese (European Portuguese / PT-PT) and English business-email models.
+**An open-source benchmark for evaluating large language models on European Portuguese (PT-PT) business email understanding and generation.**
 
-This is the **research benchmark core**, not a production job platform. It keeps the parts that answer the benchmark question and removes infrastructure that does not improve measurement: SQLite, web UI, resume/recovery manifests, storage-layer abstractions, scraped corpora, elaborate application QA, and generic concurrency torture tests.
+The **PT-PT Email LLM Benchmark** evaluates how well language models handle real-world business-email tasks in European Portuguese, with particular attention to **PT-PT linguistic fidelity, PT-BR leakage, structured email understanding, generation quality, and deterministic evaluation**.
 
-## What it measures
+Unlike benchmarks that rely primarily on LLM-as-a-judge scoring, this project uses **transparent, deterministic evaluation methods** that can be reproduced locally and audited.
+
+The benchmark measures:
+
+* European Portuguese (PT-PT) language fidelity
+* PT-PT vs PT-BR distinction
+* Email classification and structured understanding
+* Instruction adherence and semantic preservation
+* Grammar, spelling, repetition, and writing quality
+* Latency, throughput, tokens/second, and estimated cost
+
+The benchmark is designed for researchers and developers evaluating **Portuguese LLMs, multilingual language models, email-generation models, and European Portuguese NLP systems**.
+
+## What it measures (In detail)
 
 ### Structured understanding
 Schema validity, category accuracy, urgency accuracy, action-required accuracy, sentiment accuracy, language-variant accuracy, and entity F1.
