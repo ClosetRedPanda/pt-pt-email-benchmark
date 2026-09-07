@@ -101,13 +101,7 @@ def compute_word_fidelity_from_dialect(
             "replacements": v.get("replacements", []),
         })
 
-    # Dialect fidelity sensitivity:
-    # Scale proportionally so that genuine dialect leaks noticeably register
-    # rather than remaining flat at 99.7% on standard emails.
-    # An email with 0 leaks achieves 100.0%.
-    # 1 minor clitic placement on 150 words (weight 1.75) lowers the score to ~97.7%.
-    # Frequent leaks (e.g. Llama with multiple gerunds and proclisis) scale down appropriately.
-    scaled_leak_ratio = (total_weighted_penalty / total_words) * 200.0
+    scaled_leak_ratio = (total_weighted_penalty / total_words) * 100.0
     wf_score = max(0.0, min(100.0, 100.0 - scaled_leak_ratio))
     return {
         "wf_score": round(wf_score, 1),

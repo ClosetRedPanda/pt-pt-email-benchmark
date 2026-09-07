@@ -164,36 +164,17 @@ _NUMERIC_ID_RE = re.compile(r"(?<!\w)(?:\+?\d[\d .:/()\-]{2,}\d|[A-Z]{1,8}[-/]?\
 # Internal utilities
 # ---------------------------------------------------------------------------
 
-def _is_ignorable_style_rule(rule_id: str, msg: str, context: str) -> bool:
-    """
-    Returns True for stylistic nits that do not indicate genuine writing defects:
-    - Markdown trailing spaces ('  ') used for linebreaks.
-    - Purist barbarisms against standard business terms like 'email' / 'e-mail'.
-    """
-    rid = str(rule_id).upper()
-    if "WHITESPACE_RULE" in rid:
-        # Markdown allows 2+ spaces at the end of a line for a hard break
-        if context.endswith("  ") or "  \n" in context:
-            return True
-    if "BARBARISMS" in rid and ("EMAIL" in rid or "E_MAIL" in rid):
-        return True
-    return False
-
-
 def _is_dialect_issue(msg: str, rule_id: str, rule_desc: str, category_id: str = "") -> bool:
     """
     Returns True if the LanguageTool match represents a dialect/regionalism
-    difference (PT-BR vs PT-PT) or an ignorable stylistic nit.
+    difference (PT-BR vs PT-PT) rather than a genuine writing quality issue.
 
     Uses LanguageTool's native structural category/rule taxonomy.
     """
+    del msg, rule_desc
     cid = str(category_id).upper()
     rid = str(rule_id).upper()
-    if cid == "REGIONALISMS" or rid.startswith("PT_BR") or rid.startswith("PT_BRASIL"):
-        return True
-    if _is_ignorable_style_rule(rid, msg, rule_desc):
-        return True
-    return False
+    return cid == "REGIONALISMS" or rid.startswith("PT_BR") or rid.startswith("PT_BRASIL")
 
 
 def _protected_spans(text: str) -> List[Tuple[int, int]]:
