@@ -1,0 +1,106 @@
+{
+  "version": "1.0",
+  "description": "PT-PT elaboration benchmark prompts for WQ/model comparison. Externalized from config.py.",
+  "prompts": [
+    {
+      "id": "elab_pt_01",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente chamado Rui Almeida sobre um atraso na encomenda PT-991. Confirme que o envio será feito sem custos adicionais e ofereça um vale de 15% para a próxima compra. Use uma data concreta e um nome de empresa plausível; não use placeholders."
+    },
+    {
+      "id": "elab_pt_02",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma cliente chamada Marta Silva que pediu uma segunda via da fatura FT-4832 no valor de 1 240 €. Confirme que a fatura corrigida será enviada hoje e indique uma forma plausível de contacto do departamento financeiro."
+    },
+    {
+      "id": "elab_pt_03",
+      "lang": "pt-pt",
+      "prompt": "Responder a João Costa, que reportou que não consegue aceder ao portal desde ontem. Peça desculpa, explique que a equipa técnica está a analisar a conta e indique um prazo concreto para uma atualização."
+    },
+    {
+      "id": "elab_pt_04",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma cliente chamada Ana Ferreira que pediu confirmação de uma reunião na terça-feira às 14h30. Confirme a reunião, indique uma sala ou ligação plausível e mencione quem participará."
+    },
+    {
+      "id": "elab_pt_05",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que recebeu um produto danificado na encomenda LX-2048. Peça desculpa, confirme a substituição sem custos e explique que será agendada uma recolha."
+    },
+    {
+      "id": "elab_pt_06",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma empresa chamada NorteLog sobre a renovação de um contrato de software que termina em 30 de setembro. Proponha uma reunião de 30 minutos e mencione uma condição comercial plausível, sem usar placeholders."
+    },
+    {
+      "id": "elab_pt_07",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma cliente que pediu informações sobre uma subscrição empresarial para 25 utilizadores. Explique duas opções de plano e indique que poderá preparar uma proposta personalizada."
+    },
+    {
+      "id": "elab_pt_08",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que contesta uma cobrança duplicada de 89,90 €. Reconheça o problema, confirme o reembolso de uma das cobranças e indique quando deverá aparecer na conta."
+    },
+    {
+      "id": "elab_pt_09",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma colaboradora chamada Sofia Martins que pediu esclarecimentos sobre a política de despesas de viagem. Explique de forma clara quais os limites para refeições e alojamento e indique onde pode consultar a política."
+    },
+    {
+      "id": "elab_pt_10",
+      "lang": "pt-pt",
+      "prompt": "Responder a um fornecedor que pediu confirmação de uma entrega para 18 de outubro. Confirme a janela horária, indique o endereço de entrega de forma plausível e peça confirmação do motorista responsável."
+    },
+    {
+      "id": "elab_pt_11",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que pediu a alteração do endereço de entrega da encomenda PT-771. Confirme a alteração e diga que a nova morada ficará associada à entrega prevista para 12 de novembro."
+    },
+    {
+      "id": "elab_pt_12",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma candidata que perguntou pelo estado de uma candidatura. Agradeça o contacto, diga que o processo continua em avaliação e indique uma data concreta para a próxima atualização."
+    },
+    {
+      "id": "elab_pt_13",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que pediu instruções para alterar a palavra-passe da conta. Apresente passos simples, inclua uma recomendação de segurança e indique como contactar o suporte se continuar com dificuldades."
+    },
+    {
+      "id": "elab_pt_14",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma empresa parceira que propôs uma chamada na sexta-feira às 11h. Confirme ou proponha uma alternativa, mantendo um tom profissional e cordial."
+    },
+    {
+      "id": "elab_pt_15",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que reclama de uma entrega que chegou dois dias depois do prazo. Reconheça o impacto, explique brevemente a situação e proponha uma compensação razoável."
+    },
+    {
+      "id": "elab_pt_16",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma cliente chamada Teresa Lopes que pediu o cancelamento de uma subscrição antes da renovação de 5 de dezembro. Confirme o cancelamento e explique o que acontece ao acesso e à última fatura."
+    },
+    {
+      "id": "elab_pt_17",
+      "lang": "pt-pt",
+      "prompt": "Responder a um pedido de orçamento para 120 unidades de um produto. Apresente um preço unitário plausível, prazo estimado e condição de pagamento, e convide o cliente a confirmar os detalhes."
+    },
+    {
+      "id": "elab_pt_18",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que enviou documentação incompleta para abertura de conta empresarial. Indique claramente quais os dois documentos em falta e peça o respetivo envio por resposta a este e-mail."
+    },
+    {
+      "id": "elab_pt_19",
+      "lang": "pt-pt",
+      "prompt": "Responder a uma cliente que pediu confirmação de que os seus dados pessoais foram corrigidos. Confirme a atualização, indique que os sistemas foram sincronizados e explique como poderá verificar os dados."
+    },
+    {
+      "id": "elab_pt_20",
+      "lang": "pt-pt",
+      "prompt": "Responder a um cliente que agradeceu a resolução de um problema e pediu o número do processo para referência futura. Agradeça o contacto, forneça um número de processo plausível e encerre o e-mail de forma profissional."
+    }
+  ]
+}

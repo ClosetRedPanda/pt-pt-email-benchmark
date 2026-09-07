@@ -1,0 +1,444 @@
+{
+  "elab_pt_01": {
+    "required_facts": [
+      {
+        "fact_id": "client_name",
+        "pattern": "Rui Almeida"
+      },
+      {
+        "fact_id": "order_id",
+        "pattern": "PT-991"
+      },
+      {
+        "fact_id": "discount",
+        "pattern": "15%"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "no_extra_shipping_cost",
+        "pattern": "sem custos adicionais|sem custo adicional"
+      },
+      {
+        "action_id": "offer_voucher",
+        "pattern": "vale[^\\n]{0,30}15%|15%[^\\n]{0,30}vale"
+      },
+      {
+        "action_id": "concrete_date",
+        "pattern": "\\b(?:0?[1-9]|[12]\\d|3[01])\\s+de\\s+[A-Za-zÀ-ÿ]+\\b"
+      }
+    ]
+  },
+  "elab_pt_02": {
+    "required_facts": [
+      {
+        "fact_id": "client_name",
+        "pattern": "Marta Silva"
+      },
+      {
+        "fact_id": "invoice",
+        "pattern": "FT-4832"
+      },
+      {
+        "fact_id": "amount",
+        "pattern": "1\\s*240\\s*€|1,240\\s*€|1240\\s*€"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "send_corrected_invoice_today",
+        "pattern": "fatura[^\\n]{0,60}(corrigida|corrigido)[^\\n]{0,40}(hoje)|hoje[^\\n]{0,40}fatura"
+      },
+      {
+        "action_id": "finance_contact",
+        "pattern": "contacto|contactar|\\+351|@"
+      }
+    ]
+  },
+  "elab_pt_03": {
+    "required_facts": [
+      {
+        "fact_id": "client_name",
+        "pattern": "João Costa"
+      },
+      {
+        "fact_id": "portal",
+        "pattern": "portal"
+      },
+      {
+        "fact_id": "since_yesterday",
+        "pattern": "desde ontem|ontem"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "apology",
+        "pattern": "desculp|lament"
+      },
+      {
+        "action_id": "technical_team_review",
+        "pattern": "equipa técnica|equipe técnica|equipa[^\\n]{0,30}analis"
+      },
+      {
+        "action_id": "concrete_deadline",
+        "pattern": "\\b(?:0?[1-9]|[12]\\d|3[01])\\s+de\\s+[A-Za-zÀ-ÿ]+\\b|\\b(?:amanhã|segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado|domingo)\\b"
+      }
+    ]
+  },
+  "elab_pt_04": {
+    "required_facts": [
+      {
+        "fact_id": "client_name",
+        "pattern": "Ana Ferreira"
+      },
+      {
+        "fact_id": "meeting_time",
+        "pattern": "14h30|14:30"
+      },
+      {
+        "fact_id": "meeting_day",
+        "pattern": "terça-feira|terça"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "confirm_meeting",
+        "pattern": "confirm[^\\n]{0,60}(reunião|reuniao)|reunião[^\\n]{0,60}confirm"
+      },
+      {
+        "action_id": "location_or_link",
+        "pattern": "sala|liga[çc][aã]o|Teams|Zoom|Google Meet"
+      },
+      {
+        "action_id": "participants",
+        "pattern": "participar|participantes|estará|estarão"
+      }
+    ]
+  },
+  "elab_pt_05": {
+    "required_facts": [
+      {
+        "fact_id": "order_id",
+        "pattern": "LX-2048"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "apology",
+        "pattern": "desculp|lament"
+      },
+      {
+        "action_id": "free_replacement",
+        "pattern": "substitui[çc][aã]o[^\\n]{0,50}(sem custos|gratuit)|sem custos[^\\n]{0,50}substitui"
+      },
+      {
+        "action_id": "collection",
+        "pattern": "recolha|recolher|recolh"
+      }
+    ]
+  },
+  "elab_pt_06": {
+    "required_facts": [
+      {
+        "fact_id": "company",
+        "pattern": "NorteLog"
+      },
+      {
+        "fact_id": "contract_end",
+        "pattern": "30\\s+de\\s+setembro"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "propose_meeting",
+        "pattern": "reunião|reuniao"
+      },
+      {
+        "action_id": "thirty_minutes",
+        "pattern": "30\\s+minutos"
+      },
+      {
+        "action_id": "commercial_condition",
+        "pattern": "condi[çc][aã]o comercial|desconto|preço|preco|condições|condicoes"
+      }
+    ]
+  },
+  "elab_pt_07": {
+    "required_facts": [
+      {
+        "fact_id": "seats",
+        "pattern": "25\\s+utilizadores|25\\s+utilizadores"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "two_plans",
+        "pattern": "duas opções|duas op[çc][oõ]es|plano[^\\n]{0,80}(e|ou)[^\\n]{0,40}plano"
+      },
+      {
+        "action_id": "custom_proposal",
+        "pattern": "proposta personalizada"
+      }
+    ]
+  },
+  "elab_pt_08": {
+    "required_facts": [
+      {
+        "fact_id": "amount",
+        "pattern": "89[,.]90\\s*€|89,90"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "acknowledge_problem",
+        "pattern": "problema|situação|situacao|cobrança duplicada|cobranca duplicada"
+      },
+      {
+        "action_id": "refund_one_charge",
+        "pattern": "reembolso|estorno"
+      },
+      {
+        "action_id": "timing",
+        "pattern": "dias|dia[s]?|prazo|conta|\\b(?:hoje|amanhã|amanha)\\b"
+      }
+    ]
+  },
+  "elab_pt_09": {
+    "required_facts": [
+      {
+        "fact_id": "travel_expenses",
+        "pattern": "despesas de viagem|viagem"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "meals_limit",
+        "pattern": "refei[çc][aã]o|refeicao|alimenta[çc][aã]o"
+      },
+      {
+        "action_id": "lodging_limit",
+        "pattern": "alojamento|hotel"
+      },
+      {
+        "action_id": "policy_location",
+        "pattern": "política|politica|consultar|intranet|portal|documento"
+      }
+    ]
+  },
+  "elab_pt_10": {
+    "required_facts": [
+      {
+        "fact_id": "delivery_date",
+        "pattern": "18\\s+de\\s+outubro"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "time_window",
+        "pattern": "janela horária|janela horaria|entre\\s+as|das\\s+\\d+"
+      },
+      {
+        "action_id": "delivery_address",
+        "pattern": "morada|endereço|endereco"
+      },
+      {
+        "action_id": "driver_confirmation",
+        "pattern": "motorista|condutor|condutora|responsável[^\\n]{0,20}(entrega|transporte)"
+      }
+    ]
+  },
+  "elab_pt_11": {
+    "required_facts": [
+      {
+        "fact_id": "order_id",
+        "pattern": "PT-771"
+      },
+      {
+        "fact_id": "delivery_date",
+        "pattern": "12\\s+de\\s+novembro"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "confirm_address_change",
+        "pattern": "alter[aã]ção[^\\n]{0,50}(morada|endereço)|morada[^\\n]{0,50}alter"
+      },
+      {
+        "action_id": "associate_new_address",
+        "pattern": "nova morada|novo endere[çc]o"
+      }
+    ]
+  },
+  "elab_pt_12": {
+    "required_actions": [
+      {
+        "action_id": "thank_contact",
+        "pattern": "obrigad|agrade[çc]"
+      },
+      {
+        "action_id": "still_under_review",
+        "pattern": "continua[^\\n]{0,30}avaliação|continua[^\\n]{0,30}avaliacao|em avaliação|em avaliacao"
+      },
+      {
+        "action_id": "concrete_next_update",
+        "pattern": "\\b(?:0?[1-9]|[12]\\d|3[01])\\s+de\\s+[A-Za-zÀ-ÿ]+\\b"
+      }
+    ]
+  },
+  "elab_pt_13": {
+    "required_actions": [
+      {
+        "action_id": "password_steps",
+        "pattern": "palavra-passe|palavra passe"
+      },
+      {
+        "action_id": "security_recommendation",
+        "pattern": "seguran[çc]a|não partilhe|não partilhar|não divulgue|autentica[çc][aã]o"
+      },
+      {
+        "action_id": "support_contact",
+        "pattern": "suporte|contacte|contactar|apoio"
+      }
+    ]
+  },
+  "elab_pt_14": {
+    "required_facts": [
+      {
+        "fact_id": "meeting_day",
+        "pattern": "sexta-feira|sexta"
+      },
+      {
+        "fact_id": "meeting_time",
+        "pattern": "11h|11:00|11\\.00"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "confirm_or_alternative",
+        "pattern": "confirm|alternativa|proponho|podemos"
+      },
+      {
+        "action_id": "professional_tone",
+        "pattern": "cumprimentos|com os melhores cumprimentos|bom dia|boa tarde"
+      }
+    ]
+  },
+  "elab_pt_15": {
+    "required_facts": [
+      {
+        "fact_id": "delay",
+        "pattern": "dois dias|2 dias"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "acknowledge_impact",
+        "pattern": "impacto|inconveniente|compreendemos|lamentamos"
+      },
+      {
+        "action_id": "explain",
+        "pattern": "atraso|situação|situacao|transport"
+      },
+      {
+        "action_id": "compensation",
+        "pattern": "compensa[çc][aã]o|voucher|vale|desconto|crédito|credito"
+      }
+    ]
+  },
+  "elab_pt_16": {
+    "required_facts": [
+      {
+        "fact_id": "client_name",
+        "pattern": "Teresa Lopes"
+      },
+      {
+        "fact_id": "renewal_date",
+        "pattern": "5\\s+de\\s+dezembro"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "confirm_cancellation",
+        "pattern": "cancelamento|cancelada|cancelado"
+      },
+      {
+        "action_id": "access_effect",
+        "pattern": "acesso|aceder|utilizar"
+      },
+      {
+        "action_id": "last_invoice",
+        "pattern": "fatura|factura"
+      }
+    ]
+  },
+  "elab_pt_17": {
+    "required_facts": [
+      {
+        "fact_id": "quantity",
+        "pattern": "120\\s+unidades"
+      }
+    ],
+    "required_actions": [
+      {
+        "action_id": "unit_price",
+        "pattern": "preço unitário|preco unitario|\\b\\d+[,.]\\d+\\s*€"
+      },
+      {
+        "action_id": "estimated_timeline",
+        "pattern": "prazo|dias úteis|dias uteis|semanas"
+      },
+      {
+        "action_id": "payment_term",
+        "pattern": "pagamento|pagamentos|condição de pagamento|condicao de pagamento"
+      },
+      {
+        "action_id": "confirm_details",
+        "pattern": "confirmar|confirme|confirmação|confirmacao"
+      }
+    ]
+  },
+  "elab_pt_18": {
+    "required_actions": [
+      {
+        "action_id": "missing_documents_count",
+        "pattern": "dois documentos|dois[^\\n]{0,20}documentos|documentos em falta|documentos em falta"
+      },
+      {
+        "action_id": "request_email_reply",
+        "pattern": "resposta a este e-mail|responder a este e-mail|resposta a este email"
+      }
+    ]
+  },
+  "elab_pt_19": {
+    "required_actions": [
+      {
+        "action_id": "confirm_correction",
+        "pattern": "dados[^\\n]{0,50}(corrigidos|atualizados|actualizados)|atualização dos dados|actualização dos dados"
+      },
+      {
+        "action_id": "systems_synced",
+        "pattern": "sistemas[^\\n]{0,40}(sincroniz|sincroniz)"
+      },
+      {
+        "action_id": "verification",
+        "pattern": "verificar|consulte|consultar|confirmar"
+      }
+    ]
+  },
+  "elab_pt_20": {
+    "required_actions": [
+      {
+        "action_id": "thank_contact",
+        "pattern": "obrigad|agrade[çc]"
+      },
+      {
+        "action_id": "case_number",
+        "pattern": "processo|caso|refer[êe]ncia|número[^\\n]{0,20}(processo|caso)|numero[^\\n]{0,20}(processo|caso)"
+      },
+      {
+        "action_id": "professional_close",
+        "pattern": "cumprimentos|com os melhores cumprimentos|atentamente"
+      }
+    ]
+  }
+}
