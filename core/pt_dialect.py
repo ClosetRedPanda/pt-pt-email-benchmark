@@ -341,23 +341,48 @@ def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
                         "validated": True,
                     })
 
-    # 3. Brazilian "Ter" used for existential "Haver" (Subjectless transitive 'ter')
+    # 3. Brazilian "Ter" used for existential "Haver" (subjectless 3rd-person 'ter')
+    # Tightened: only flag clear existential candidates. Ordinary possession,
+    # obligation, and 1st/2nd-person forms of "ter" are valid in PT-PT and must
+    # not zero compliance. No vocabulary list is used — only morphological and
+    # dependency features from spaCy.
     for token in doc:
-        if token.lemma_ == "ter" and token.pos_ in ("VERB", "AUX"):
-            has_explicit_nsubj = any(c.dep_ in ("nsubj", "nsubj:pass") for c in token.children)
-            has_obj = any(c.dep_ in ("obj", "obl") for c in token.children)
-            if not has_explicit_nsubj and has_obj:
-                context = token.text
-                issues.append({
-                    "source": "Linguistic Grammar Ruleset (spaCy)",
-                    "rule_id": "PTBR_TER_HAVER",
-                    "message": f"Detected existential 'ter' in '{context}'. In European Portuguese (PT-PT), use 'haver' (e.g., 'Há...').",
-                    "context": context,
-                    "replacements": ["Há ..."],
-                    "severity": "medium",
-                    "evidence_type": "grammar_rule",
-                    "validated": True,
-                })
+        if token.lemma_ != "ter" or token.pos_ not in ("VERB", "AUX"):
+            continue
+        # Existential BR "ter" is characteristically 3rd person.
+        person = token.morph.get("Person")
+        if person and "3" not in person:
+            continue
+        has_explicit_nsubj = any(
+            c.dep_ in ("nsubj", "nsubj:pass") for c in token.children
+        )
+        # Also treat a preceding nominal subject attached to this verb as explicit.
+        if not has_explicit_nsubj:
+            for prev in reversed(list(doc[: token.i])):
+                if prev.is_punct or prev.text in (".", "!", "?", ";", "\n"):
+                    break
+                if prev.dep_ in ("nsubj", "nsubj:pass") and prev.head == token:
+                    has_explicit_nsubj = True
+                    break
+                if prev.pos_ in ("NOUN", "PROPN", "PRON") and prev.head == token:
+                    has_explicit_nsubj = True
+                    break
+        has_obj = any(c.dep_ in ("obj", "obl") for c in token.children)
+        if not has_explicit_nsubj and has_obj:
+            context = token.text
+            issues.append({
+                "source": "Linguistic Grammar Ruleset (spaCy)",
+                "rule_id": "PTBR_TER_HAVER",
+                "message": (
+                    f"Detected existential 'ter' in '{context}'. "
+                    "In European Portuguese (PT-PT), use 'haver' (e.g., 'Há...')."
+                ),
+                "context": context,
+                "replacements": ["Há ..."],
+                "severity": "medium",
+                "evidence_type": "grammar_rule",
+                "validated": True,
+            })
 
     # 4. Brazilian "Para mim" + Infinitive verb
     for i, token in enumerate(doc):
