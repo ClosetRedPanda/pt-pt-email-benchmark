@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 from core.scorecard import build_elaboration_scorecard
+from core.statistics import paired_bootstrap
 from core.pt_dialect import evaluate_pt_dialect
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.artifacts import ArtifactValidationError, load_manifest, validate_rows
@@ -249,7 +250,52 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
     return "\n".join(lines)
 
 
-def _json_comparison(paths: List[Path], summaries: List[Dict[str, Any]], kind: str) -> Dict[str, Any]:
+def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List[Dict[str, Any]]:
+    reports = []
+    for first_index in range(len(paths)):
+        for second_index in range(first_index + 1, len(paths)):
+            first_path = paths[first_index]
+            second_path = paths[second_index]
+            reports.append({
+                "first": first_path.name,
+                "second": second_path.name,
+                "statistics": paired_bootstrap(
+                    read_jsonl(first_path),
+                    read_jsonl(second_path),
+                    repetitions=repetitions,
+                ),
+            })
+    return reports
+
+
+def _pretty_uncertainty(reports: List[Dict[str, Any]]) -> str:
+    lines = ["", "=" * 72, "Paired uncertainty (second model minus first model)"]
+    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_detected", "writing_quality_score")
+    for report in reports:
+        lines.extend(["-" * 72, f"  {report['first']}  ->  {report['second']}"])
+        metrics = report["statistics"]["metrics"]
+        for metric in metric_order:
+            result = metrics.get(metric, {})
+            if result.get("unavailable"):
+                lines.append(f"    {metric:<32} N/A")
+                continue
+            ci = result["ci95"]
+            lines.append(
+                f"    {metric:<32} mean {result['mean_difference']:+.2f} "
+                f"95% CI [{ci[0]:+.2f}, {ci[1]:+.2f}] "
+                f"n={result['n']} W/L/T={result['wins']}/{result['losses']}/{result['ties']}"
+            )
+    return "\n".join(lines)
+
+
+def _json_comparison(
+    paths: List[Path],
+    summaries: List[Dict[str, Any]],
+    kind: str,
+    *,
+    bootstrap_repetitions: int = 4000,
+    include_uncertainty: bool = True,
+) -> Dict[str, Any]:
     """Return one machine-readable document for all compared artifacts."""
     artifacts = []
     for path, summary in zip(paths, summaries):
@@ -274,7 +320,7 @@ def _json_comparison(paths: List[Path], summaries: List[Dict[str, Any]], kind: s
             if left.get(key) is not None and right.get(key) is not None:
                 deltas[key] = right[key] - left[key]
 
-    return {
+    report = {
         "kind": kind,
         "artifact_provenance": sorted({item["summary"].get("artifact_provenance", "unknown") for item in artifacts}),
         "artifacts": artifacts,
@@ -283,6 +329,11 @@ def _json_comparison(paths: List[Path], summaries: List[Dict[str, Any]], kind: s
             "values": deltas,
         },
     }
+    if include_uncertainty and kind == "generation" and len(paths) >= 2:
+        report["pairwise_uncertainty"] = _pairwise_uncertainty(
+            paths, repetitions=bootstrap_repetitions,
+        )
+    return report
 
 
 def main() -> None:
@@ -290,6 +341,15 @@ def main() -> None:
     parser.add_argument("results", nargs="+", type=Path)
     parser.add_argument("--kind", choices=("analysis", "generation"), default="generation")
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON instead")
+    parser.add_argument(
+        "--bootstrap-repetitions", type=int, default=4000,
+        help="paired bootstrap repetitions for JSON comparison output",
+    )
+    parser.add_argument(
+        "--no-uncertainty", "--no-paired-uncertainty",
+        dest="no_uncertainty", action="store_true",
+        help="omit the paired uncertainty section from the comparison",
+    )
     parser.add_argument(
         "--rescore",
         action="store_true",
@@ -334,9 +394,15 @@ def main() -> None:
             summaries.append(summary)
             if not args.json:
                 print(_pretty_report(path, summary, args.kind))
+    if not args.json and not args.no_uncertainty and args.kind == "generation" and len(args.results) >= 2:
+        print(_pretty_uncertainty(_pairwise_uncertainty(args.results)))
     if args.json:
         print(json.dumps(
-            _json_comparison(args.results, summaries, args.kind),
+            _json_comparison(
+                args.results, summaries, args.kind,
+                bootstrap_repetitions=args.bootstrap_repetitions,
+                include_uncertainty=not args.no_uncertainty,
+            ),
             ensure_ascii=False,
             sort_keys=True,
             indent=2,

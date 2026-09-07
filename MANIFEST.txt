@@ -10,6 +10,7 @@ core/languagetool_local.py
 core/pt_dialect.py
 core/schemas.py
 core/scorecard.py
+core/statistics.py
 core/wf_fidelity.py
 core/writing_quality.py
 data/analysis_reference.jsonl

@@ -38,9 +38,14 @@ Known limitations:
 - Legacy recomputation is explicit through `--rescore`.
 - Generic placeholder detection and Markdown-link exclusions have regression tests.
 - Result rows are validated for identity, status, numeric values, and expected task IDs.
+- Strict generation validation rejects empty, refused, provider-error, and truncated outputs.
 - Manifest-backed artifacts bind result hashes to benchmark inputs, evaluator source,
   optional resources, and installed dependency versions.
 - Scorecards expose metric-specific denominators and explicitly list unavailable metrics.
+- Comparisons provide deterministic paired task-level bootstrap intervals, wins,
+  losses, and ties without treating independent task samples as independent runs.
+- Mutation tests cover negation, changed facts, forbidden changes, placeholders,
+  and Markdown-link false positives.
 
 ### Still unsafe or incomplete
 
@@ -50,7 +55,8 @@ Known limitations:
 - Existing `v2` artifacts remain legacy artifacts without manifests.
 - A manifest records package versions, but external service behavior and provider
 	model revisions remain outside local control.
-- There is no paired comparison, confidence interval, or uncertainty estimate.
+- Paired bootstrap comparison is available, but the task set remains small and the
+	interval reflects uncertainty across these tasks rather than population validity.
 - The WQ calibration is not demonstrated to have independent multi-rater reliability.
 - Instruction and semantic checks remain regex/pattern-based proxies.
 - The result validator and manifest are versioned, but the row contract is not yet

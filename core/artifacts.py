@@ -50,6 +50,33 @@ def _number_is_valid(value: Any) -> bool:
     return math.isfinite(number) and number >= 0
 
 
+def _completion_errors(row: Dict[str, Any], row_id: str) -> List[str]:
+    """Reject successful generation rows that are not complete model outputs."""
+    if row.get("status") != "success":
+        return []
+    errors: List[str] = []
+    if not str(row.get("content", "")).strip():
+        errors.append(f"row ({row_id or '?' }): successful generation lacks content")
+    raw_response = row.get("raw_response")
+    if not isinstance(raw_response, dict):
+        return errors
+    choices = raw_response.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        errors.append(f"row ({row_id or '?' }): successful generation lacks provider choices")
+        return errors
+    finish_reason = choices[0].get("finish_reason")
+    if finish_reason not in {None, "stop"}:
+        errors.append(
+            f"row ({row_id or '?' }): unsuccessful finish_reason={finish_reason!r}"
+        )
+    message = choices[0].get("message")
+    if isinstance(message, dict) and message.get("refusal"):
+        errors.append(f"row ({row_id or '?' }): provider refusal in successful generation")
+    if raw_response.get("error"):
+        errors.append(f"row ({row_id or '?' }): provider error in successful generation")
+    return errors
+
+
 def validate_rows(
     rows: Iterable[Dict[str, Any]],
     *,
@@ -80,6 +107,8 @@ def validate_rows(
             errors.append(f"row {index} ({row_id or '?' }): error status lacks error detail")
         if status == "success" and row.get("error"):
             errors.append(f"row {index} ({row_id or '?' }): success row contains error detail")
+        if strict and kind == "generation":
+            errors.extend(_completion_errors(row, row_id))
         for field in _NUMERIC_FIELDS:
             if field in row and row[field] is not None and not _number_is_valid(row[field]):
                 errors.append(f"row {index} ({row_id or '?' }): {field} must be finite and non-negative")

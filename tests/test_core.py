@@ -10,6 +10,7 @@ from core.scorecard import build_elaboration_scorecard, format_scorecard
 from runner import score_analysis
 from core.artifacts import ArtifactValidationError, build_manifest, load_manifest, validate_rows, write_manifest
 from compare import validate_comparison_artifacts, _json_comparison
+from core.statistics import paired_bootstrap
 
 
 def test_reference_rows_validate():
@@ -53,6 +54,31 @@ def test_generation_ignores_markdown_link_labels():
         'Consulte [a política](https://example.com/politica).', {}, 'Responder ao cliente.'
     )
     assert out['adherence_details']['placeholder_count'] == 0
+
+
+def test_generation_mutations_are_detected():
+    constraints = {
+        'required_actions': [{'action_id': 'confirmar_envio', 'pattern': r'confirm\w* o envio'}],
+        'required_facts': [{'fact_id': 'date', 'pattern': r'15 de outubro'}],
+        'forbidden_changes': [{'forbidden_id': 'wrong_price', 'pattern': r'99,90 €'}],
+    }
+    good = evaluate_generation_output(
+        'Confirmamos o envio em 15 de outubro. O valor permanece 89,90 €.', constraints
+    )
+    assert good['instruction_adherence_score'] == 100.0
+    assert good['semantic_preservation_score'] == 100.0
+
+    negated = evaluate_generation_output(
+        'Não podemos confirmar o envio em 15 de outubro. O valor permanece 89,90 €.', constraints
+    )
+    assert negated['instruction_adherence_score'] < 100.0
+
+    changed = evaluate_generation_output(
+        'Confirmamos o envio em 16 de outubro. O valor é 99,90 €.', constraints
+    )
+    assert changed['semantic_preservation_score'] < 100.0
+    assert changed['semantic_details']['missing_facts'] == ['date']
+    assert changed['semantic_details']['forbidden_violations'][0]['forbidden_id'] == 'wrong_price'
 
 
 def test_dialect_outputs_separate_signals():
@@ -194,12 +220,40 @@ def test_analysis_reports_missing_failed_duplicate_and_unexpected_results():
 
 def test_artifact_validator_accepts_strict_rows():
     result = validate_rows(
-        [{'id': 'task-1', 'model': 'model-a', 'status': 'success', 'latency_ms': 10}],
+        [{
+            'id': 'task-1', 'model': 'model-a', 'status': 'success',
+            'content': 'Resposta completa.', 'latency_ms': 10,
+            'raw_response': {'choices': [{'finish_reason': 'stop', 'message': {'content': 'Resposta completa.'}}]},
+        }],
         kind='generation',
         expected_ids=['task-1'],
     )
     assert result['artifact_schema_version'] == '1.0'
     assert result['row_count'] == 1
+
+
+def test_artifact_validator_rejects_truncated_and_refused_generation():
+    rows = [{
+        'id': 'task-1', 'model': 'model-a', 'status': 'success',
+        'content': 'partial',
+        'raw_response': {'choices': [{'finish_reason': 'length', 'message': {'content': 'partial'}}]},
+    }]
+    try:
+        validate_rows(rows, kind='generation')
+    except ArtifactValidationError as exc:
+        assert 'finish_reason' in str(exc)
+    else:
+        raise AssertionError('truncated generation was accepted')
+
+    rows[0]['raw_response'] = {
+        'choices': [{'finish_reason': 'stop', 'message': {'refusal': 'cannot comply'}}],
+    }
+    try:
+        validate_rows(rows, kind='generation')
+    except ArtifactValidationError as exc:
+        assert 'refusal' in str(exc)
+    else:
+        raise AssertionError('refused generation was accepted')
 
 
 def test_artifact_validator_rejects_duplicate_and_missing_status():
@@ -275,3 +329,26 @@ def test_json_comparison_is_one_structured_document(tmp_path):
     )
     assert len(report['artifacts']) == 2
     assert report['delta']['values']['instruction_adherence_pct'] == 10
+    without_uncertainty = _json_comparison(
+        [first_path, second_path], [first, second], 'generation',
+        include_uncertainty=False,
+    )
+    assert 'pairwise_uncertainty' not in without_uncertainty
+
+
+def test_paired_bootstrap_preserves_task_pairing():
+    first = [
+        {'id': 'a', 'status': 'success', 'instruction_adherence_pct': 50},
+        {'id': 'b', 'status': 'success', 'instruction_adherence_pct': 100},
+    ]
+    second = [
+        {'id': 'a', 'status': 'success', 'instruction_adherence_pct': 60},
+        {'id': 'b', 'status': 'success', 'instruction_adherence_pct': 90},
+    ]
+    result = paired_bootstrap(first, second, metrics=('instruction_adherence_pct',), repetitions=100)
+    metric = result['metrics']['instruction_adherence_pct']
+    assert metric['n'] == 2
+    assert metric['mean_difference'] == 0
+    assert metric['wins'] == 1
+    assert metric['losses'] == 1
+    assert len(metric['ci95']) == 2
