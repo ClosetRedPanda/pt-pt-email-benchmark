@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pt-email-benchmark-lean"
+version = "1.0.0"
+description = "Lean, auditable PT-PT/English email benchmark"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.27.0",
+  "jsonschema>=4.22.0",
+  "requests>=2.31.0",
+  "language-tool-python>=2.9.0",
+  "spylls>=0.1.7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
