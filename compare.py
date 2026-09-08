@@ -37,7 +37,10 @@ LABELS = {
     "ptpt_compliance_graded_pct": "PT-PT compliance (graded)",
     "ptbr_leakage_pct": "PT-BR leakage",
     "wf_score": "Word fidelity",
-    "local_writing_quality": "Writing quality",
+    # Issue 3: the defect-only score is the primary writing-quality metric for
+    # model comparison; the calibrated score is the conservative headline.
+    "local_writing_quality_defect_only": "Writing quality (primary)",
+    "local_writing_quality": "Writing quality (calibrated)",
     "latency_p50_ms": "Latency p50",
     "latency_p90_ms": "Latency p90",
     "latency_p95_ms": "Latency p95",
@@ -188,6 +191,7 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
                 "wf_score": summary.get("wf_score"),
             },
             "writing": {
+                "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
                 "local_writing_quality": summary.get("local_writing_quality"),
             },
             "performance": {
@@ -275,7 +279,7 @@ def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List
 
 def _pretty_uncertainty(reports: List[Dict[str, Any]]) -> str:
     lines = ["", "=" * 72, "Paired uncertainty (second model minus first model)"]
-    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct", "writing_quality_score", "wq_defect_only_score")
+    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct", "wq_defect_only_score", "writing_quality_score")
     for report in reports:
         lines.extend(["-" * 72, f"  {report['first']}  ->  {report['second']}"])
         metrics = report["statistics"]["metrics"]
@@ -314,7 +318,7 @@ def _json_comparison(
     metric_keys = (
         "instruction_adherence_pct", "semantic_preservation_pct",
         "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct",
-        "wf_score", "local_writing_quality", "local_writing_quality_defect_only",
+        "wf_score", "local_writing_quality_defect_only", "local_writing_quality",
         "latency_p50_ms", "latency_p90_ms", "throughput_emails_per_min",
         "tokens_per_second", "cost_per_1k_emails_usd",
     )

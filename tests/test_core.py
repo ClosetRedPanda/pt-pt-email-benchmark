@@ -9,7 +9,7 @@ from core.schemas import EMAIL_ANALYSIS_SCHEMA, validate_email_analysis
 from core.pt_dialect import evaluate_pt_dialect, check_lexical_contrasts
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
-from core.scorecard import build_elaboration_scorecard, format_scorecard
+from core.scorecard import build_elaboration_scorecard, format_scorecard, SCORECARD_SECTIONS
 from runner import score_analysis
 from core.artifacts import ArtifactValidationError, build_manifest, load_manifest, validate_rows, write_manifest
 from compare import validate_comparison_artifacts, _json_comparison
@@ -179,6 +179,20 @@ def test_scorecard_defect_only_writing_metric_unavailable_without_evidence():
 def test_wq_defect_only_score_included_in_default_pairwise_metrics():
     from core.statistics import DEFAULT_METRICS
     assert "wq_defect_only_score" in DEFAULT_METRICS
+
+
+def test_wq_defect_only_score_is_the_primary_writing_metric():
+    # Issue 3: primacy is structural, not just present — the defect-only score
+    # leads the default pairwise metrics and every writing scorecard section,
+    # with the calibrated score listed second everywhere.
+    from core.statistics import DEFAULT_METRICS
+    assert DEFAULT_METRICS.index("wq_defect_only_score") < DEFAULT_METRICS.index("writing_quality_score")
+    assert SCORECARD_SECTIONS["writing"][0] == "local_writing_quality_defect_only"
+    formatted = format_scorecard({
+        "local_writing_quality_defect_only": 100.0,
+        "local_writing_quality": 91.5,
+    })
+    assert list(formatted["writing"])[0] == "local_writing_quality_defect_only"
 
 
 def test_wf_does_not_depend_on_classifier_probability():

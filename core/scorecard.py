@@ -30,12 +30,15 @@ SCORECARD_SECTIONS = {
         "wf_score",
     ),
     "writing": (
+        # Issue 3: the defect-only aggregate is the primary writing-quality metric
+        # for model comparison; the calibrated aggregate follows as the
+        # conservative headline. Listed in that order everywhere downstream.
+        "local_writing_quality_defect_only",
+        "local_writing_quality",
         "grammar_errors_per_email",
         "spelling_errors_per_email",
         "structural_failures_pct",
         "repetition_pct",
-        "local_writing_quality",
-        "local_writing_quality_defect_only",
     ),
     "performance": (
         "latency_p50_ms",
@@ -198,8 +201,8 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "ptpt_compliance_graded_pct": _mean(comp_graded),
         "ptbr_leakage_pct": (sum(bool(v) for v in leakage_flags) / len(leakage_flags) * 100.0) if leakage_flags else None,
         "wf_score": _mean(wf_vals),
-        "local_writing_quality": _mean(wq),
         "local_writing_quality_defect_only": _mean(wq_defect_only),
+        "local_writing_quality": _mean(wq),
         "avg_grammar_errors_per_email": _mean(grammar),
         "avg_spelling_errors_per_email": _mean(spelling),
         "structural_failures_pct": (sum(value > 0 for value in structural) / len(structural) * 100.0) if structural else None,
@@ -226,8 +229,8 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
             "ptpt_compliance_graded_pct": len(comp_graded),
             "ptbr_leakage_pct": len(leakage_flags),
             "wf_score": len(wf_vals),
-            "local_writing_quality": len(wq),
             "local_writing_quality_defect_only": len(wq_defect_only),
+            "local_writing_quality": len(wq),
             "grammar_errors_per_email": len(grammar),
             "spelling_errors_per_email": len(spelling),
             "structural_failures_pct": len(structural),
@@ -272,12 +275,12 @@ def format_scorecard(summary: Dict[str, Any]) -> Dict[str, Any]:
             "wf_score": summary.get("wf_score"),
         },
         "writing": {
+            "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
+            "local_writing_quality": summary.get("local_writing_quality"),
             "grammar_errors_per_email": summary.get("avg_grammar_errors_per_email"),
             "spelling_errors_per_email": summary.get("avg_spelling_errors_per_email"),
             "structural_failures_pct": summary.get("structural_failures_pct"),
             "repetition_pct": summary.get("repetition_pct"),
-            "local_writing_quality": summary.get("local_writing_quality"),
-            "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
         },
         "performance": {
             "latency_p50_ms": summary.get("latency_p50_ms"),

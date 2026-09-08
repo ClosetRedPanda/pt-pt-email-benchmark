@@ -29,7 +29,12 @@ Instruction adherence and semantic preservation using deterministic constraints 
 EUPTVID probability (independent signal), PT-PT compliance, PT-BR leakage, and Word Fidelity (WF). EUPTVID is **not** the numerical base of WF.
 
 ### Writing quality
-Deterministic local grammar, spelling, repetition, structural, style, and calibrated WQ signals. Dialect/regionalism issues are kept separate from WQ.
+Deterministic local grammar, spelling, repetition, structural, style, and WQ signals. Dialect/regionalism issues are kept separate from WQ. Two scores are reported:
+
+- `wq_defect_only_score` — the **primary** metric for comparing writing quality between models. It reflects only the observed defect burden on an uncompressed 0-100 scale, so flawless prose reaches 100.0 and a clearly defective email drops into the 30-60 band, preserving variance exactly where models differ.
+- `writing_quality_score` — the calibrated score (`50 + 10 × latent` from the frozen length-neutral tree ensemble, capped below 100). The ceiling is deliberate: a clean sample is never indistinguishable from a formally perfect score. As a result it compresses the top of the scale (flawless text lands near 91-96), which is why it must not be used alone to rank models in the clean-writing range; it is the conservative headline figure.
+
+Scorecards and pairwise comparisons list the primary (defect-only) metric first. Older artifacts produced before the defect-only field was surfaced show it as unavailable rather than inferred.
 
 ### Performance
 Latency, throughput, tokens/sec, and known cost per 1,000 emails.

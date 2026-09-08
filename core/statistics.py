@@ -13,8 +13,11 @@ DEFAULT_METRICS = (
     "ptpt_compliance_pct",
     "ptbr_leakage_pct",
     "wf_score",
-    "writing_quality_score",
+    # Issue 3: the defect-only score is the primary writing-quality metric for
+    # model comparison (uncapped by the calibration ceiling); it is listed before
+    # the calibrated score so default reports lead with it.
     "wq_defect_only_score",
+    "writing_quality_score",
 )
 
 
