@@ -627,3 +627,50 @@ def test_p0_3c_graded_compliance_key_present_on_every_return_branch():
         assert (result['ptpt_compliance_pct'] is None) == (
             result['ptpt_compliance_graded_pct'] is None
         ), f'availability mismatch for {text!r}'
+
+
+def test_p0_2_legacy_rows_without_parse_repaired_are_not_counted_as_clean():
+    """Absence of `parse_repaired` is unknown, not 'was not repaired'."""
+    truth = [{'id': 'a', 'ground_truth': {}}, {'id': 'b', 'ground_truth': {}}]
+    legacy = [
+        {'id': 'a', 'status': 'success', 'parsed': {}, 'is_valid_schema': True},
+        {'id': 'b', 'status': 'success', 'parsed': {}, 'is_valid_schema': True},
+    ]
+    scored = score_analysis(truth, legacy)
+    # The legacy headline metric still works...
+    assert scored['schema_validity_pct'] == 100.0
+    # ...but raw validity was never measured, so it must not claim 100%.
+    assert scored['schema_validity_raw_pct'] is None
+    assert scored['schema_validity_repaired_pct'] is None
+    assert scored['denominators']['schema_validity_raw_pct'] == 0
+
+
+def test_p0_4_all_costs_unknown_reports_none_not_zero():
+    records = [{'status': 'success', 'latency_ms': 10, 'cost_usd': None}
+               for _ in range(3)]
+    s = build_elaboration_scorecard(records)
+    assert s['cost_per_1k_emails_usd'] is None
+    assert s['cost_per_1k_emails_usd_known_only'] is None
+    assert s['known_cost_samples'] == 0
+    assert s['unknown_cost_samples'] == 3
+
+
+def test_p0_1_zero_span_does_not_produce_infinity():
+    """Identical timestamps must not divide by zero."""
+    records = [{'id': 'a', 'status': 'success', 'latency_ms': 0,
+                'started_at': 5.0, 'finished_at': 5.0}]
+    s = build_elaboration_scorecard(records)
+    assert s['observed_wall_ms'] == 0.0
+    assert s['throughput_emails_per_min'] is None
+    assert s['tokens_per_second'] is None
+
+
+def test_p0_1_malformed_timestamps_do_not_crash():
+    records = [
+        {'id': 'a', 'status': 'success', 'latency_ms': 10,
+         'started_at': 'not-a-number', 'finished_at': None},
+        {'id': 'b', 'status': 'success', 'latency_ms': 10,
+         'started_at': 1.0, 'finished_at': 2.0},
+    ]
+    s = build_elaboration_scorecard(records)
+    assert s['observed_wall_ms'] == pytest.approx(1000)

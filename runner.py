@@ -178,11 +178,17 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         # companions are reported next to it:
         #   schema_validity_raw_pct      - valid *without* any repair
         #   schema_validity_repaired_pct - share of samples that needed repair
+        # Legacy artifacts predate `parse_repaired`. Absence of the field is
+        # "unknown", not "was not repaired": counting it as clean would report
+        # a confident raw-validity figure that was never measured, recreating
+        # the very inflation this fix exists to remove. Such rows are excluded
+        # from the raw/repaired denominators instead.
         is_valid = bool(got.get("is_valid_schema"))
-        was_repaired = bool(got.get("parse_repaired"))
         checks["schema"].append(is_valid)
-        checks["schema_raw"].append(is_valid and not was_repaired)
-        checks["schema_repaired"].append(was_repaired)
+        if "parse_repaired" in got:
+            was_repaired = bool(got.get("parse_repaired"))
+            checks["schema_raw"].append(is_valid and not was_repaired)
+            checks["schema_repaired"].append(was_repaired)
         gt = row.get("ground_truth", {})
         checks["category"].append(_exact(parsed.get("category"), gt.get("category")))
         checks["urgency"].append(_exact(parsed.get("urgency"), gt.get("urgency")))
