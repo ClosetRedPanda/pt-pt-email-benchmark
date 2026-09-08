@@ -138,6 +138,8 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
     unexpected_ids = sorted(set(result_ids) - truth_ids)
     metrics = {
         "schema_validity_pct": None,
+        "schema_validity_raw_pct": None,
+        "schema_validity_repaired_pct": None,
         "category_acc_pct": None,
         "urgency_acc_pct": None,
         "action_req_acc_pct": None,
@@ -152,7 +154,7 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         "requested_samples": len(truth_rows),
         "attempted_samples": len(set(result_ids)),
     }
-    checks = {k: [] for k in ["schema", "category", "urgency", "action", "sentiment", "language"]}
+    checks = {k: [] for k in ["schema", "schema_raw", "schema_repaired", "category", "urgency", "action", "sentiment", "language"]}
     f1s: List[float] = []
     missing = 0
     for row in truth_rows:
@@ -166,7 +168,21 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
             metrics["failed_results"] += 1
             continue
         parsed = got.get("parsed") or {}
-        checks["schema"].append(bool(got.get("is_valid_schema")))
+        # FIX (P0.2): `is_valid_schema` is set to True even when the raw model
+        # output was malformed and only became parseable after
+        # `repair_json_content()` patched it (stripping markdown fences,
+        # trailing commas, ...). Reporting only that flag let a model emitting
+        # broken JSON score identically to one emitting clean JSON.
+        #
+        # `schema_validity_pct` is kept as-is for continuity, and two honest
+        # companions are reported next to it:
+        #   schema_validity_raw_pct      - valid *without* any repair
+        #   schema_validity_repaired_pct - share of samples that needed repair
+        is_valid = bool(got.get("is_valid_schema"))
+        was_repaired = bool(got.get("parse_repaired"))
+        checks["schema"].append(is_valid)
+        checks["schema_raw"].append(is_valid and not was_repaired)
+        checks["schema_repaired"].append(was_repaired)
         gt = row.get("ground_truth", {})
         checks["category"].append(_exact(parsed.get("category"), gt.get("category")))
         checks["urgency"].append(_exact(parsed.get("urgency"), gt.get("urgency")))
@@ -178,6 +194,8 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         return round(100 * sum(xs) / len(xs), 2) if xs else None
     metrics.update({
         "schema_validity_pct": pct(checks["schema"]),
+        "schema_validity_raw_pct": pct(checks["schema_raw"]),
+        "schema_validity_repaired_pct": pct(checks["schema_repaired"]),
         "category_acc_pct": pct(checks["category"]),
         "urgency_acc_pct": pct(checks["urgency"]),
         "action_req_acc_pct": pct(checks["action"]),
@@ -187,6 +205,8 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         "missing_results": missing,
         "denominators": {
             "schema_validity_pct": len(checks["schema"]),
+            "schema_validity_raw_pct": len(checks["schema_raw"]),
+            "schema_validity_repaired_pct": len(checks["schema_repaired"]),
             "category_acc_pct": len(checks["category"]),
             "urgency_acc_pct": len(checks["urgency"]),
             "action_req_acc_pct": len(checks["action"]),
@@ -241,6 +261,7 @@ async def _run_generation(model: str, prompts: Dict[str, Any], constraints: Dict
                     "pt_dialect_score": dialect.get("pt_dialect_score"),
                     "euptvid_probability": dialect.get("euptvid_prob"),
                     "ptpt_compliance_pct": dialect.get("ptpt_compliance_pct"),
+                    "ptpt_compliance_graded_pct": dialect.get("ptpt_compliance_graded_pct"),
                     "ptbr_leakage_detected": dialect.get("ptbr_leakage_detected"),
                     "wf_score": wf.get("wf_score"),
                     "writing_quality_score": wq.get("writing_quality_score"),

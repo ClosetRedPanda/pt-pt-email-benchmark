@@ -25,6 +25,7 @@ SCORECARD_SECTIONS = {
     "ptpt": (
         "euptvid_probability",
         "ptpt_compliance_pct",
+        "ptpt_compliance_graded_pct",
         "ptbr_leakage_pct",
         "wf_score",
     ),
@@ -47,20 +48,41 @@ SCORECARD_SECTIONS = {
 }
 
 
-def _observed_elapsed_ms(records: List[Dict[str, Any]]) -> float:
-    """Return wall-clock span for concurrent runs; fallback to summed latency for legacy files."""
-    starts = []
-    finishes = []
+def _observed_elapsed_ms(records: List[Dict[str, Any]]) -> Optional[float]:
+    """Return the observed wall-clock span of a run, in milliseconds.
+
+    FIX (P0.1): the previous implementation fell back to ``sum(latency_ms)``
+    whenever wall-clock timestamps were unavailable *or* whenever a single
+    record was missing them. Summed latency is not wall-clock time: under
+    concurrency N the sum overstates elapsed time by roughly N, so
+    ``throughput_emails_per_min`` and ``tokens_per_second`` came out ~N times
+    too low. Worse, the failure was silent and plausible-looking.
+
+    Concurrency is not recorded per row (only in the run manifest), so elapsed
+    time genuinely cannot be reconstructed from latencies alone. Rather than
+    emit a confidently wrong number, return ``None`` and let callers publish
+    the throughput metrics as unavailable.
+
+    Records that carry timestamps are used even when *other* records do not:
+    a failed row without timestamps must not discard the whole measurement.
+    """
+    starts: List[float] = []
+    finishes: List[float] = []
     for record in records:
+        started = record.get("started_at")
+        finished = record.get("finished_at")
+        if started is None or finished is None:
+            continue
         try:
-            if record.get("started_at") is not None and record.get("finished_at") is not None:
-                starts.append(float(record["started_at"]))
-                finishes.append(float(record["finished_at"]))
+            started_f = float(started)
+            finished_f = float(finished)
         except (TypeError, ValueError):
             continue
-    if starts and finishes and len(starts) == len(records):
-        return max(0.0, (max(finishes) - min(starts)) * 1000.0)
-    return sum(max(0.0, float(r.get("latency_ms") or 0.0)) for r in records)
+        starts.append(started_f)
+        finishes.append(finished_f)
+    if not starts:
+        return None
+    return max(0.0, (max(finishes) - min(starts)) * 1000.0)
 
 
 def _mean(values: Iterable[float]) -> Optional[float]:
@@ -119,7 +141,20 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     prompt_tokens = sum(int(_safe_num(r.get("prompt_tokens"))) for r in successful)
     completion_tokens = sum(int(_safe_num(r.get("completion_tokens"))) for r in successful)
     wall_ms = _observed_elapsed_ms(records)
+    # P0.1: throughput is only meaningful when wall-clock time was observed.
+    throughput_available = wall_ms is not None and wall_ms > 0
     total_cost = None if unknown_cost_count else (sum(known_costs) if known_costs else None)
+
+    # FIX (P0.4): a single unknown cost previously nulled the entire run's cost
+    # metric, so one provider hiccup destroyed all cost data. `total_cost` (and
+    # therefore `cost_per_1k_emails_usd`) keeps its strict all-or-nothing
+    # semantics, because a partial total is not a total and existing consumers
+    # rely on that. The partial figure is exposed alongside it instead, scoped
+    # to the samples whose cost is actually known and always paired with its
+    # denominator so it can never be mistaken for a full-run number.
+    cost_per_1k_known_only = (
+        (sum(known_costs) / len(known_costs) * 1000.0) if known_costs else None
+    )
 
     # PT-PT metrics only apply to outputs that were explicitly required to be PT-PT.
     # In elaboration records that requirement is carried by target_lang.
@@ -127,6 +162,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     wf_vals = [float(r["wf_score"]) for r in ptpt if r.get("wf_score") is not None]
     euptvid = [float(r["euptvid_probability"]) for r in ptpt if r.get("euptvid_probability") is not None]
     comp = [float(r["ptpt_compliance_pct"]) for r in ptpt if r.get("ptpt_compliance_pct") is not None]
+    comp_graded = [float(r["ptpt_compliance_graded_pct"]) for r in ptpt if r.get("ptpt_compliance_graded_pct") is not None]
     leakage_flags = [r.get("ptbr_leakage_detected") for r in ptpt if isinstance(r.get("ptbr_leakage_detected"), bool)]
 
     adh = [r.get("instruction_adherence_pct") for r in successful if r.get("instruction_adherence_pct") is not None]
@@ -149,6 +185,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "semantic_preservation_pct": _mean(sem),
         "euptvid_probability": _mean(euptvid),
         "ptpt_compliance_pct": _mean(comp),
+        "ptpt_compliance_graded_pct": _mean(comp_graded),
         "ptbr_leakage_pct": (sum(bool(v) for v in leakage_flags) / len(leakage_flags) * 100.0) if leakage_flags else None,
         "wf_score": _mean(wf_vals),
         "local_writing_quality": _mean(wq),
@@ -160,9 +197,12 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "latency_p90_ms": _percentile(latencies, 90),
         "latency_p95_ms": _percentile(latencies, 95),
         "latency_p99_ms": _percentile(latencies, 99),
-        "throughput_emails_per_min": (len(successful) / (wall_ms / 60000.0)) if wall_ms > 0 else 0.0,
-        "tokens_per_second": ((prompt_tokens + completion_tokens) / (wall_ms / 1000.0)) if wall_ms > 0 else 0.0,
+        "throughput_emails_per_min": (len(successful) / (wall_ms / 60000.0)) if throughput_available else None,
+        "tokens_per_second": ((prompt_tokens + completion_tokens) / (wall_ms / 1000.0)) if throughput_available else None,
         "cost_per_1k_emails_usd": (total_cost / len(successful) * 1000.0) if (successful and total_cost is not None) else None,
+        "cost_per_1k_emails_usd_known_only": cost_per_1k_known_only,
+        "known_cost_samples": len(known_costs),
+        "observed_wall_ms": wall_ms,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_cost_usd": total_cost,
@@ -172,6 +212,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
             "semantic_preservation_pct": len(sem),
             "euptvid_probability": len(euptvid),
             "ptpt_compliance_pct": len(comp),
+            "ptpt_compliance_graded_pct": len(comp_graded),
             "ptbr_leakage_pct": len(leakage_flags),
             "wf_score": len(wf_vals),
             "local_writing_quality": len(wq),
@@ -192,7 +233,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
                 "wf_score": len(wf_vals),
                 "local_writing_quality": len(wq),
             }.items() if count == 0
-        }),
+        } | (set() if throughput_available else {"throughput_emails_per_min", "tokens_per_second"})),
     }
 
 
@@ -213,6 +254,7 @@ def format_scorecard(summary: Dict[str, Any]) -> Dict[str, Any]:
         "ptpt": {
             "euptvid_probability": summary.get("euptvid_probability"),
             "ptpt_compliance_pct": summary.get("ptpt_compliance_pct"),
+            "ptpt_compliance_graded_pct": summary.get("ptpt_compliance_graded_pct"),
             "ptbr_leakage_pct": summary.get("ptbr_leakage_pct"),
             "wf_score": summary.get("wf_score"),
         },
@@ -231,5 +273,7 @@ def format_scorecard(summary: Dict[str, Any]) -> Dict[str, Any]:
             "throughput_emails_per_min": summary.get("throughput_emails_per_min"),
             "tokens_per_second": summary.get("tokens_per_second"),
             "cost_per_1k_emails_usd": summary.get("cost_per_1k_emails_usd"),
+            "cost_per_1k_emails_usd_known_only": summary.get("cost_per_1k_emails_usd_known_only"),
+            "unknown_cost_samples": summary.get("unknown_cost_samples"),
         },
     }

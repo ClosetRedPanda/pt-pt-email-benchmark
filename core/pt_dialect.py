@@ -375,8 +375,52 @@ def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
                 if prev.pos_ in ("NOUN", "PROPN", "PRON") and prev.head == token:
                     has_explicit_nsubj = True
                     break
-        has_obj = any(c.dep_ in ("obj", "obl") for c in token.children)
-        if not has_explicit_nsubj and has_obj:
+        # FIX (P0.3): Portuguese is pro-drop, so an absent `nsubj` does NOT
+        # imply an existential reading. "Tem razão." (= "[você] tem razão",
+        # perfectly good PT-PT) has no subject child and a direct object, so
+        # the previous test flagged it and — because ptpt_compliance_pct is
+        # binary — drove a clean email straight to 0% compliance.
+        #
+        # Existential BR "ter" introduces a *new, indefinite* entity into the
+        # discourse ("Tem um problema no sistema", "Tem vários erros"), whereas
+        # the pro-drop possessive/light-verb uses take a bare or definite
+        # object ("tem razão", "tem tempo", "tem a certeza", "tem medo").
+        # Requiring an overt indefinite determiner on the object separates the
+        # two without any hand-maintained vocabulary list.
+        existential_obj = None
+        for child in token.children:
+            if child.dep_ != "obj":
+                continue
+            for det in child.children:
+                if det.dep_ not in ("det", "nummod"):
+                    continue
+                det_morph = str(det.morph)
+                # Indefiniteness is read purely from morphology, never from a
+                # word list. `pt_core_news_sm` omits the Definite feature on
+                # plural "uns"/"umas", so an article that is *not* explicitly
+                # Definite=Def is treated as indefinite -- this generalises to
+                # the whole determiner system rather than enumerating members.
+                is_indef_article = (
+                    "Definite=Ind" in det_morph
+                    or "PronType=Ind" in det_morph
+                    or ("PronType=Art" in det_morph and "Definite=Def" not in det_morph)
+                )
+                if is_indef_article:
+                    existential_obj = child
+                    break
+            if existential_obj is not None:
+                break
+
+        # Bare cardinals are deliberately NOT treated as existential evidence.
+        # A counted object is systematically ambiguous between an existential
+        # ("tem duas reuniões na agenda") and an ordinary possessive/temporal
+        # reading ("tem duas semanas para responder"), and no morphological
+        # feature separates the two. Flagging them would trade the pro-drop
+        # false positives for a new, equally arbitrary class of them, so this
+        # detector abstains: under a binary compliance metric a false positive
+        # is far more damaging than a miss.
+
+        if not has_explicit_nsubj and existential_obj is not None:
             context = token.text
             issues.append({
                 "source": "Linguistic Grammar Ruleset (spaCy)",
@@ -456,6 +500,8 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
       euptvid_label: predicted dialect label
       is_clean_ptpt: True if 0 PT-BR violations detected
       ptpt_compliance_pct: 100.0 if clean, 0.0 if violations present
+      ptpt_compliance_graded_pct: violation-density compliance [0.0 - 100.0],
+        a lower-variance companion to the binary metric above
       ptbr_leakage_detected: True if >= 1 PT-BR violations
       violation_count: score-eligible PT-BR violation count
       ptbr_candidate_count: all PT-BR-looking candidates, including diagnostic-only findings
@@ -468,6 +514,7 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
             "euptvid_label": None,
             "is_clean_ptpt": None,
             "ptpt_compliance_pct": None,
+            "ptpt_compliance_graded_pct": None,
             "ptbr_leakage_detected": None,
             "pt_dialect_score": None,
             "violation_count": 0,
@@ -490,6 +537,7 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
                     "euptvid_label": "UNKNOWN",
                     "is_clean_ptpt": None,
                     "ptpt_compliance_pct": None,
+                    "ptpt_compliance_graded_pct": None,
                     "ptbr_leakage_detected": None,
                     "pt_dialect_score": None,
                     "violation_count": 0,
@@ -507,6 +555,7 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
             "euptvid_label": "EN",
             "is_clean_ptpt": False,
             "ptpt_compliance_pct": 0.0,
+            "ptpt_compliance_graded_pct": 0.0,
             "ptbr_leakage_detected": False,
             "pt_dialect_score": 0.0,
             "violation_count": 1,
@@ -564,6 +613,7 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
             "euptvid_label": euptvid_res.get("label", "UNKNOWN"),
             "is_clean_ptpt": None,
             "ptpt_compliance_pct": None,
+            "ptpt_compliance_graded_pct": None,
             "ptbr_leakage_detected": None,
             "pt_dialect_score": None,
             "violation_count": 0,
@@ -593,11 +643,20 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
     )
     score = max(0.0, min(100.0, 100.0 - (weighted_penalty / words) * 100.0))
 
+    # FIX (P0.3c): `ptpt_compliance_pct` is deliberately binary, which means a
+    # single violation in a long, otherwise-perfect email reads exactly the
+    # same as an email that is PT-BR throughout. That is very high variance for
+    # a headline metric feeding paired bootstrap comparisons. Expose a graded
+    # companion based on weighted violation density so consumers can choose a
+    # lower-variance signal; the binary metric is unchanged for continuity.
+    ptpt_compliance_graded_pct = round(score, 1)
+
     return {
         "euptvid_prob": euptvid_res.get("ptpt_prob"),
         "euptvid_label": euptvid_res.get("label"),
         "is_clean_ptpt": is_clean_ptpt,
         "ptpt_compliance_pct": ptpt_compliance_pct,
+        "ptpt_compliance_graded_pct": ptpt_compliance_graded_pct,
         "ptbr_leakage_detected": ptbr_leakage_detected,
         "pt_dialect_score": round(score, 1),
         "violation_count": len(validated_ptbr_violations),

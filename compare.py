@@ -34,6 +34,7 @@ LABELS = {
     "semantic_preservation_pct": "Semantic preservation",
     "euptvid_probability": "EUPTVID probability",
     "ptpt_compliance_pct": "PT-PT compliance",
+    "ptpt_compliance_graded_pct": "PT-PT compliance (graded)",
     "ptbr_leakage_pct": "PT-BR leakage",
     "wf_score": "Word fidelity",
     "local_writing_quality": "Writing quality",
@@ -43,6 +44,8 @@ LABELS = {
     "latency_p99_ms": "Latency p99",
     "throughput_emails_per_min": "Throughput",
     "tokens_per_second": "Tokens / second",
+    "cost_per_1k_emails_usd_known_only": "Cost / 1k (known-cost samples)",
+    "unknown_cost_samples": "Unknown-cost samples",
     "cost_per_1k_emails_usd": "Cost / 1,000 emails",
 }
 
@@ -62,8 +65,10 @@ def _format_value(key: str, value: Any) -> str:
         return f"{float(value):,.1f} emails/min"
     if key == "tokens_per_second":
         return f"{float(value):,.1f} tokens/s"
-    if key == "cost_per_1k_emails_usd":
+    if key in ("cost_per_1k_emails_usd", "cost_per_1k_emails_usd_known_only"):
         return f"${float(value):,.4f}"
+    if key in ("unknown_cost_samples", "known_cost_samples"):
+        return f"{int(value):,d}"
     return f"{float(value):.1f}" if isinstance(value, (int, float)) else str(value)
 
 

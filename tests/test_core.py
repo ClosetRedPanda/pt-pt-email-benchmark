@@ -1,6 +1,8 @@
 import json
 import re
 from pathlib import Path
+
+import pytest
 from config import ANALYSIS_REFERENCE, ELABORATION_CONSTRAINTS
 from core.generation_evaluator import evaluate_generation_output, load_constraint_map
 from core.schemas import EMAIL_ANALYSIS_SCHEMA, validate_email_analysis
@@ -213,7 +215,10 @@ def test_failed_records_do_not_affect_quality_or_performance():
     assert s['failed_samples'] == 1
     assert s['instruction_adherence_pct'] == 80
     assert s['latency_p50_ms'] == 100
-    assert s['throughput_emails_per_min'] == 600
+    # Wall-clock derived (finished_at - started_at = 0.1s for 1 successful
+    # sample => 600/min); compared with tolerance because 1.1 - 1 is not exact
+    # in binary floating point.
+    assert s['throughput_emails_per_min'] == pytest.approx(600)
 
 
 def test_euptvid_is_independent_of_dialect_score():
@@ -392,3 +397,233 @@ def test_paired_bootstrap_preserves_task_pairing():
     assert metric['wins'] == 1
     assert metric['losses'] == 1
     assert len(metric['ci95']) == 2
+
+
+# ---------------------------------------------------------------------------
+# P0 regression tests
+# ---------------------------------------------------------------------------
+
+def test_p0_1_throughput_uses_wall_clock_not_summed_latency():
+    """Concurrent runs must not be penalised by summing per-request latency."""
+    # 8 requests, 1000 ms each, all issued concurrently within the same second.
+    records = [
+        {
+            'id': f'r{i}', 'status': 'success', 'latency_ms': 1000,
+            'started_at': 100.0, 'finished_at': 101.0,
+            'prompt_tokens': 10, 'completion_tokens': 10,
+        }
+        for i in range(8)
+    ]
+    s = build_elaboration_scorecard(records)
+    # Wall clock is 1s for 8 emails => 480/min. The old summed-latency
+    # fallback produced 60/min, i.e. 8x too low.
+    assert s['throughput_emails_per_min'] == pytest.approx(480)
+    assert s['tokens_per_second'] == pytest.approx(160)
+
+
+def test_p0_1_throughput_unavailable_without_timestamps():
+    """Legacy rows without timestamps report no throughput instead of a wrong one."""
+    records = [
+        {'id': f'r{i}', 'status': 'success', 'latency_ms': 1000}
+        for i in range(8)
+    ]
+    s = build_elaboration_scorecard(records)
+    assert s['throughput_emails_per_min'] is None
+    assert s['tokens_per_second'] is None
+    assert s['observed_wall_ms'] is None
+    assert 'throughput_emails_per_min' in s['unavailable_metrics']
+    assert 'tokens_per_second' in s['unavailable_metrics']
+
+
+def test_p0_1_partial_timestamps_still_measure_wall_clock():
+    """A failed row lacking timestamps must not discard the whole measurement."""
+    records = [
+        {'id': 'ok', 'status': 'success', 'latency_ms': 100,
+         'started_at': 10.0, 'finished_at': 10.5},
+        {'id': 'bad', 'status': 'error', 'error': 'boom'},
+    ]
+    s = build_elaboration_scorecard(records)
+    assert s['observed_wall_ms'] == pytest.approx(500)
+    assert s['throughput_emails_per_min'] == pytest.approx(120)
+
+
+def test_p0_2_repaired_json_is_distinguished_from_clean_json():
+    truth = [{'id': 'a', 'ground_truth': {}}, {'id': 'b', 'ground_truth': {}}]
+    results = [
+        {'id': 'a', 'status': 'success', 'parsed': {}, 'is_valid_schema': True,
+         'parse_repaired': False},
+        {'id': 'b', 'status': 'success', 'parsed': {}, 'is_valid_schema': True,
+         'parse_repaired': True, 'raw_parse_error': 'Expecting value'},
+    ]
+    scored = score_analysis(truth, results)
+    # Legacy headline metric is unchanged: both parse in the end.
+    assert scored['schema_validity_pct'] == 100.0
+    # But only one model output was valid without repair.
+    assert scored['schema_validity_raw_pct'] == 50.0
+    assert scored['schema_validity_repaired_pct'] == 50.0
+
+
+def test_p0_4_unknown_cost_does_not_destroy_all_cost_data():
+    records = [
+        {'status': 'success', 'latency_ms': 10, 'cost_usd': 0.001}
+        for _ in range(19)
+    ]
+    records.append({'status': 'success', 'latency_ms': 10, 'cost_usd': None})
+    s = build_elaboration_scorecard(records)
+    # Strict all-or-nothing total is preserved (a partial total is not a total).
+    assert s['cost_per_1k_emails_usd'] is None
+    assert s['unknown_cost_samples'] == 1
+    # ...but the known-sample figure survives the single hiccup.
+    assert s['known_cost_samples'] == 19
+    assert s['cost_per_1k_emails_usd_known_only'] == pytest.approx(1.0)
+
+
+def _corpus_texts():
+    """Real PT-PT documents shipped with the benchmark (no invented sentences)."""
+    import json
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "data"
+    sources = [
+        ("analysis_reference.jsonl", ("email",)),
+        ("wq_human_reference.jsonl", ("text", "content", "email")),
+        ("calibration_dataset.jsonl", ("text", "content", "email")),
+    ]
+    out = []
+    for name, keys in sources:
+        path = root / name
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            for key in keys:
+                value = obj.get(key)
+                if isinstance(value, str) and value.strip():
+                    out.append((str(obj.get("id")), value))
+                    break
+    return out
+
+
+def test_p0_3_ter_detector_only_fires_on_labelled_ptbr_corpus_documents():
+    """On the shipped PT-PT corpus the detector must not invent violations.
+
+    Rather than asserting against hand-written sentences, this walks every
+    reference document and requires that any PTBR_TER_HAVER hit belongs to a
+    fixture explicitly labelled as a ter/haver PT-BR example.
+    """
+    from core.pt_dialect import check_lexicon_and_rules, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    texts = _corpus_texts()
+    assert texts, 'no reference corpus found'
+    for doc_id, text in texts:
+        hits = [
+            i for i in check_lexicon_and_rules(text)
+            if i['rule_id'] == 'PTBR_TER_HAVER'
+        ]
+        if hits and 'ter_haver' not in doc_id:
+            raise AssertionError(
+                f'false positive on unlabelled PT-PT document {doc_id}: {hits}'
+            )
+
+
+def test_p0_3_labelled_ter_haver_fixture_is_still_detected():
+    """The fix must not silence the corpus fixture that is genuinely PT-BR."""
+    from core.pt_dialect import check_lexicon_and_rules, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    labelled = [t for i, t in _corpus_texts() if 'ter_haver' in i]
+    assert labelled, 'expected a labelled ter/haver fixture in the corpus'
+    for text in labelled:
+        assert [
+            i for i in check_lexicon_and_rules(text)
+            if i['rule_id'] == 'PTBR_TER_HAVER'
+        ]
+
+
+def test_p0_3_prodrop_is_decided_by_morphology_not_a_word_list():
+    """Pro-drop light-verb frames are generated combinatorially, not curated.
+
+    Any bare or definite-marked object must be treated as a possessive /
+    light-verb reading regardless of which noun fills the slot, so the rule
+    scales to the lexicon instead of to an enumerated set of nouns.
+    """
+    import itertools
+    from core.pt_dialect import check_lexicon_and_rules, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    verbs = ['Tem', 'Tinha']
+    objects = [
+        'razão', 'tempo', 'medo', 'cuidado', 'paciência',
+        'conhecimento', 'interesse', 'dificuldade',
+        'a certeza', 'a informação', 'o direito', 'a possibilidade',
+    ]
+    for verb, obj in itertools.product(verbs, objects):
+        sentence = f'{verb} {obj} para avançar.'
+        assert not [
+            i for i in check_lexicon_and_rules(sentence)
+            if i['rule_id'] == 'PTBR_TER_HAVER'
+        ], f'false positive on {sentence!r}'
+
+
+def test_p0_3_existential_detection_generalises_over_indefinite_determiners():
+    """Existential detection keys off Definite/PronType features, not lemmas."""
+    import itertools
+    from core.pt_dialect import check_lexicon_and_rules, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    # Determiners spanning the indefinite article series and indefinite
+    # quantifiers, each agreeing with its noun.
+    frames = [
+        ('um', 'problema'), ('uma', 'questão'), ('uns', 'documentos'),
+        ('umas', 'questões'), ('vários', 'erros'), ('muita', 'gente'),
+        ('alguns', 'clientes'), ('qualquer', 'falha'),
+    ]
+    for det, noun in frames:
+        sentence = f'Tem {det} {noun} no sistema.'
+        assert [
+            i for i in check_lexicon_and_rules(sentence)
+            if i['rule_id'] == 'PTBR_TER_HAVER'
+        ], f'missed existential in {sentence!r}'
+
+
+def test_p0_3_negated_proclisis_is_not_flagged():
+    """'Não me diga' is correct PT-PT proclisis after a negation trigger."""
+    from core.pt_dialect import check_lexicon_and_rules, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    for sentence in ['Não me diga que o prazo mudou.', 'Nunca me disseram isso.']:
+        flagged = [
+            i for i in check_lexicon_and_rules(sentence)
+            if i['rule_id'] == 'PTBR_PROCLISIS_START'
+        ]
+        assert not flagged, f'false positive on {sentence!r}'
+
+
+def test_p0_3c_graded_compliance_key_present_on_every_return_branch():
+    """Every exit path must expose the same keys (cf. P3.1 inconsistent keys).
+
+    A key that silently disappears on some branches is indistinguishable from
+    a genuine None to a `.get()` caller, which is exactly how the existing
+    ptbr_violation_count inconsistency hides data.
+    """
+    from core.pt_dialect import evaluate_pt_dialect, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    branch_inputs = [
+        '',                                        # empty-text branch
+        '   ',                                     # whitespace branch
+        'This is an English email, entirely.',     # english-output branch
+        'Bom dia, agradeço a sua mensagem.',       # normal scoring branch
+    ]
+    for text in branch_inputs:
+        result = evaluate_pt_dialect(text, use_languagetool=False)
+        assert 'ptpt_compliance_graded_pct' in result, (
+            f'graded key missing for input {text!r}'
+        )
+        # The graded companion must agree with the binary metric on
+        # availability: both known, or both unknown.
+        assert (result['ptpt_compliance_pct'] is None) == (
+            result['ptpt_compliance_graded_pct'] is None
+        ), f'availability mismatch for {text!r}'

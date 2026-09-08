@@ -15,6 +15,7 @@ _NUMERIC_FIELDS = {
     "latency_ms", "prompt_tokens", "completion_tokens", "reasoning_tokens",
     "total_tokens", "cost_usd", "instruction_adherence_pct",
     "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct",
+    "ptpt_compliance_graded_pct",
     "wf_score", "writing_quality_score",
 }
 
