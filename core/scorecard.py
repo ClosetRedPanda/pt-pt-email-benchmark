@@ -194,6 +194,15 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     grammar = [d.get("grammar_error_count") for d in writing_details if d.get("grammar_error_count") is not None]
     if not grammar_checked:
         grammar = []
+    # REPRO-1: surface which writing-quality evaluator version produced the
+    # rows, so an artifact rescored or regenerated with different evaluator code
+    # is identifiable from the summary alone. Falls back to None for rows that
+    # predate the version field (reported as N/A, never invented).
+    wq_versions = [
+        d.get("wq_evaluator_version")
+        for d in writing_details
+        if isinstance(d, dict) and isinstance(d.get("wq_evaluator_version"), str)
+    ]
     spelling = [d.get("spelling_error_count") for d in writing_details if d.get("spelling_error_count") is not None]
     repetition = [d.get("repetition_count") for d in writing_details if d.get("repetition_count") is not None]
     structural = [d.get("structural_issue_count") for d in writing_details if d.get("structural_issue_count") is not None]
@@ -215,6 +224,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "local_writing_quality_defect_only": _mean(wq_defect_only),
         "local_writing_quality": _mean(wq),
         "languagetool_available": grammar_checked,
+        "wq_evaluator_version": wq_versions[0] if wq_versions else None,
         "avg_grammar_errors_per_email": _mean(grammar),
         "avg_spelling_errors_per_email": _mean(spelling),
         "structural_failures_pct": (sum(value > 0 for value in structural) / len(structural) * 100.0) if structural else None,

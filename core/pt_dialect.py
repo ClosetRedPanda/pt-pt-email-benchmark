@@ -440,6 +440,14 @@ def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
     # obligation, and 1st/2nd-person forms of "ter" are valid in PT-PT and must
     # not zero compliance. No vocabulary list is used — only morphological and
     # dependency features from spaCy.
+    #
+    # Known limitation (documented, not chased): plural-quantifier objects are
+    # not detected. `pt_core_news_sm` tags "vários" as NOUN/amod (not DET), so
+    # "Tem vários erros no relatório." — the same existential shape with a
+    # plural quantifier — never reaches the indefinite-determiner scan below and
+    # is a deterministic false negative. The rule's conditions are otherwise
+    # consistent; any extension must avoid new false positives on pro-drop
+    # possession ("tem bons resultados" == "[ele] tem bons resultados").
     for token in doc:
         if token.lemma_ != "ter" or token.pos_ not in ("VERB", "AUX"):
             continue

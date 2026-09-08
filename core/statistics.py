@@ -11,6 +11,7 @@ DEFAULT_METRICS = (
     "semantic_preservation_pct",
     "euptvid_probability",
     "ptpt_compliance_pct",
+    "ptpt_compliance_graded_pct",
     "ptbr_leakage_pct",
     "wf_score",
     # Issue 3: the defect-only score is the primary writing-quality metric for

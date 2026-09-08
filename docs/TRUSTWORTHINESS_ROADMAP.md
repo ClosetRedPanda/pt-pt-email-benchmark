@@ -243,6 +243,11 @@ An unconstrained task is not a failed semantic task and must not be silently
 included as a zero. It should be counted separately from the constrained
 denominator.
 
+The current 20-task set defines no `forbidden_changes`, so the contradiction /
+invented-fact half of the semantic evaluator is implemented but never exercised
+by these tasks; until tasks exercise it, the metric can only report missing
+required facts, not hallucinated ones.
+
 Add adversarial tests for:
 
 - negation;
@@ -292,6 +297,27 @@ The EUPTVID probability is a classifier output, not a calibrated probability
 of perfect PT-PT writing. A high EUPTVID value cannot cancel a detected PT-BR
 lexical or grammatical violation.
 
+Documented limitations of the lexical-contrast layer (as of the 2026-09
+release, all by design):
+
+- the two bundled dictionaries are not dialect-matched siblings: pt_BR derives
+  compounds (e.g. `intranet` via `intra-` + `net`) that pt_PT.dic does not
+  cover, so a correct business word absent from pt_PT.dic reads as a PT-BR
+  leak. This is the dictionary-coverage-gap class; it is out of scope for the
+  no-hardcoded-exceptions rule and should be revisited by honouring the
+  dictionaries' own derivation metadata (affix rules, `PREAO90=` conversions)
+  rather than word lists;
+- the existential-`ter` rule does not detect plural-quantifier objects
+  (`Tem vários erros…`): `pt_core_news_sm` tags `vários` as NOUN/amod, so the
+  indefinite-determiner scan never fires. Known deterministic false negative;
+- `Word fidelity` is leak *density* (weighted penalties ÷ words): a single leak
+  costs less in a longer email, so it is reported with a density label and must
+  not be read as a percentage of clean mail;
+- the spelling sub-stage of writing quality accepts a word present in either
+  bundled Portuguese dictionary (pt_PT or pt_BR); dialect judgement stays in
+  the dialect layer so one incomplete dictionary cannot cause spelling false
+  positives.
+
 ### 11. Writing quality
 
 Report dimensions separately:
@@ -323,6 +349,10 @@ Use blinded multi-rater human labels with separate calibration and test sets. Re
 Do not report the aggregate WQ number as human quality until the human-rating
 study is complete. Preserve the individual dimensions so a model cannot appear
 better merely because it avoids one class of detector finding.
+
+Grammar evidence depends on a responding local LanguageTool server: when none
+responded, `grammar_errors_per_email` is reported as unavailable (N/A), never as
+a measured zero, and the report states that grammar evidence was unavailable.
 
 ## Priority 4: Make Performance Comparable
 

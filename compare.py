@@ -37,11 +37,14 @@ LABELS = {
     "ptpt_compliance_pct": "PT-PT compliance",
     "ptpt_compliance_graded_pct": "PT-PT compliance (graded)",
     "ptbr_leakage_pct": "PT-BR leakage",
-    "wf_score": "Word fidelity",
+    # REL-08: word fidelity is a leak *density* (weighted penalties divided by
+    # total words), so the label must not read like a percentage of clean mail.
+    "wf_score": "Word fidelity (density)",
     # Issue 3: the defect-only score is the primary writing-quality metric for
     # model comparison; the calibrated score is the conservative headline.
     "local_writing_quality_defect_only": "Writing quality (primary)",
     "local_writing_quality": "Writing quality (calibrated)",
+    "wq_evaluator_version": "WQ evaluator version",
     "latency_p50_ms": "Latency p50",
     "latency_p90_ms": "Latency p90",
     "latency_p95_ms": "Latency p95",
@@ -245,6 +248,90 @@ def validate_comparison_artifacts(
     return manifests
 
 
+_CONSTRAINT_PROFILE = None
+
+
+def _constraint_profile() -> Dict[str, Any]:
+    """Cache whether the bundled task constraints exercise forbidden checks.
+
+    Surfaces in reports whether the semantic metric can actually catch
+    contradictions/hallucinations for this task set (REL-02): the check exists
+    in code but is inert until tasks define ``forbidden_changes``.
+    """
+    global _CONSTRAINT_PROFILE
+    if _CONSTRAINT_PROFILE is not None:
+        return _CONSTRAINT_PROFILE
+    profile: Dict[str, Any] = {"task_count": 0, "has_forbidden": False}
+    try:
+        from runner import load_constraints
+        constraints = load_constraints()
+        profile["task_count"] = len(constraints)
+        profile["has_forbidden"] = any(
+            isinstance(spec, dict)
+            and (
+                (spec.get("forbidden_changes") or [])
+                or (spec.get("forbidden_facts") or [])
+            )
+            for spec in constraints.values()
+        )
+    except Exception:
+        pass
+    _CONSTRAINT_PROFILE = profile
+    return profile
+
+
+def _generation_reading_notes(summary: Dict[str, Any]) -> List[str]:
+    """Short 'how to read this' notes appended to generation reports.
+
+    Each note states a documented measurement boundary so a headline number is
+    not over-read: adherence/semantic are deterministic pattern-coverage; the
+    current task set exercises no forbidden-change checks; compliance is
+    per-email binary (compare the graded line); word fidelity is leak density;
+    tokens/s is a whole-run aggregate; and the WQ evaluator version identifies
+    the code that produced the writing scores.
+    """
+    profile = _constraint_profile()
+    notes: List[str] = []
+    notes.append(
+        "  Note: instruction adherence and semantic preservation measure deterministic "
+        "pattern coverage of each"
+    )
+    notes.append(
+        "        task's required actions/facts, not holistic quality or general semantic "
+        "equivalence."
+    )
+    if profile.get("task_count") and not profile.get("has_forbidden"):
+        notes.append(
+            "  Note: the current task set defines no forbidden_changes, so contradictions "
+            "and invented facts are not"
+        )
+        notes.append(
+            "        penalised by semantic preservation for these tasks."
+        )
+    notes.append(
+        "  Note: PT-PT compliance is binary per email (one score-eligible violation zeroes "
+        "the email); the"
+    )
+    notes.append(
+        "        graded line above reports violation density as a percentage."
+    )
+    notes.append(
+        "  Note: word fidelity is leak density (weighted penalties / words); one leak costs "
+        "less in a longer"
+    )
+    notes.append(
+        "        email, so compare it across runs only at similar lengths."
+    )
+    notes.append(
+        "  Note: tokens/s divides total tokens by whole-run wall clock and includes "
+        "concurrency and queueing."
+    )
+    version = summary.get("wq_evaluator_version")
+    if version:
+        notes.append(f"  Note: writing-quality evaluator version: {version}")
+    return notes
+
+
 def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
     rows = read_jsonl(path)
     model_names = sorted({str(row["model"]) for row in rows if row.get("model")})
@@ -265,6 +352,7 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
             "writing": {
                 "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
                 "local_writing_quality": summary.get("local_writing_quality"),
+                "wq_evaluator_version": summary.get("wq_evaluator_version"),
             },
             "performance": {
                 key: summary.get(key)
@@ -318,6 +406,8 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
             f"{key}={value}" for key, value in sorted(denominators.items())
         )])
     if kind == "generation":
+        lines.extend(["", *_generation_reading_notes(summary)])
+    if kind == "generation":
         dialect_statuses = {            str((row.get("dialect_evaluation") or {}).get("language_adherence_status"))
             for row in rows
         }
@@ -353,7 +443,7 @@ def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List
 
 def _pretty_uncertainty(reports: List[Dict[str, Any]]) -> str:
     lines = ["", "=" * 72, "Paired uncertainty (second model minus first model)"]
-    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct", "wq_defect_only_score", "writing_quality_score")
+    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct", "ptbr_leakage_pct", "wq_defect_only_score", "writing_quality_score")
     for report in reports:
         lines.extend(["-" * 72, f"  {report['first']}  ->  {report['second']}"])
         metrics = report["statistics"]["metrics"]
@@ -391,7 +481,8 @@ def _json_comparison(
 
     metric_keys = (
         "instruction_adherence_pct", "semantic_preservation_pct",
-        "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct",
+        "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct",
+        "ptbr_leakage_pct",
         "wf_score", "local_writing_quality_defect_only", "local_writing_quality",
         "latency_p50_ms", "latency_p90_ms", "throughput_emails_per_min",
         "tokens_per_second", "cost_per_1k_emails_usd",

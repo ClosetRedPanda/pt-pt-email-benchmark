@@ -210,6 +210,40 @@ def test_scorecard_defect_only_writing_metric_unavailable_without_evidence():
 def test_wq_defect_only_score_included_in_default_pairwise_metrics():
     from core.statistics import DEFAULT_METRICS
     assert "wq_defect_only_score" in DEFAULT_METRICS
+    # Graded compliance is part of the default comparison set, ordered with its
+    # binary sibling so pairwise reports show both.
+    assert DEFAULT_METRICS.index("ptpt_compliance_pct") < DEFAULT_METRICS.index("ptpt_compliance_graded_pct")
+
+
+def test_scorecard_surfaces_wq_evaluator_version():
+    # REPRO-1: the summary must identify which writing-quality evaluator code
+    # produced the rows (falls back to N/A for rows that predate the field).
+    rows = [{
+        'status': 'success',
+        'writing_quality': {'wq_evaluator_version': 'task7-length-neutral-v1.1-school-scale'},
+    }, {
+        'status': 'success',
+        'writing_quality': {},
+    }]
+    s = build_elaboration_scorecard(rows)
+    assert s['wq_evaluator_version'] == 'task7-length-neutral-v1.1-school-scale'
+    s2 = build_elaboration_scorecard([{'status': 'success', 'writing_quality': {}}])
+    assert s2['wq_evaluator_version'] is None
+
+
+def test_generation_reading_notes_explain_measurement_boundaries():
+    # The pretty generation report appends notes that prevent over-reading the
+    # headline metrics: pattern-coverage semantics, unused forbidden checks,
+    # binary compliance, word-fidelity density, whole-run tokens/s.
+    from compare import _generation_reading_notes
+    notes = _generation_reading_notes({'wq_evaluator_version': 'v1'})
+    joined = "\n".join(notes)
+    assert 'pattern coverage' in joined
+    assert 'no forbidden_changes' in joined
+    assert 'binary per email' in joined
+    assert 'density' in joined
+    assert 'tokens/s' in joined
+    assert 'v1' in joined
 
 
 def test_wq_defect_only_score_is_the_primary_writing_metric():
