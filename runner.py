@@ -292,6 +292,7 @@ async def _run_generation(model: str, prompts: Dict[str, Any], constraints: Dict
                     "ptbr_leakage_detected": dialect.get("ptbr_leakage_detected"),
                     "wf_score": wf.get("wf_score"),
                     "writing_quality_score": wq.get("writing_quality_score"),
+                    "wq_defect_only_score": wq.get("wq_defect_only_score"),
                     "writing_quality": wq,
                     "generation_evaluation": ev,
                     "dialect_evaluation": dialect,

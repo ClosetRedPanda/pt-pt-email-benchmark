@@ -35,6 +35,7 @@ SCORECARD_SECTIONS = {
         "structural_failures_pct",
         "repetition_pct",
         "local_writing_quality",
+        "local_writing_quality_defect_only",
     ),
     "performance": (
         "latency_p50_ms",
@@ -168,6 +169,15 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     adh = [r.get("instruction_adherence_pct") for r in successful if r.get("instruction_adherence_pct") is not None]
     sem = [r.get("semantic_preservation_pct") for r in successful if r.get("semantic_preservation_pct") is not None]
     wq = [r.get("writing_quality_score") for r in successful if r.get("writing_quality_score") is not None]
+    # Issue 3: `writing_quality_score` is calibrated (40-tree ensemble) and capped
+    # below 100 by design so a clean sample is never indistinguishable from a
+    # formally perfect score; its observed top end for genuinely flawless prose is
+    # therefore ~91-96, which makes model comparisons in the "clean writing" range
+    # compressed. `wq_defect_only_score` is the defect-burden counterpart computed
+    # from the same violations but *before* that ceiling: flawless text reaches
+    # 100.0 there, so it preserves spread exactly where the calibrated score
+    # compresses. Aggregate and surface both so the unambiguous one is comparable.
+    wq_defect_only = [r.get("wq_defect_only_score") for r in successful if r.get("wq_defect_only_score") is not None]
     writing_details = [r.get("writing_quality") or {} for r in successful]
     grammar = [d.get("grammar_error_count") for d in writing_details if d.get("grammar_error_count") is not None]
     spelling = [d.get("spelling_error_count") for d in writing_details if d.get("spelling_error_count") is not None]
@@ -189,6 +199,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "ptbr_leakage_pct": (sum(bool(v) for v in leakage_flags) / len(leakage_flags) * 100.0) if leakage_flags else None,
         "wf_score": _mean(wf_vals),
         "local_writing_quality": _mean(wq),
+        "local_writing_quality_defect_only": _mean(wq_defect_only),
         "avg_grammar_errors_per_email": _mean(grammar),
         "avg_spelling_errors_per_email": _mean(spelling),
         "structural_failures_pct": (sum(value > 0 for value in structural) / len(structural) * 100.0) if structural else None,
@@ -216,6 +227,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
             "ptbr_leakage_pct": len(leakage_flags),
             "wf_score": len(wf_vals),
             "local_writing_quality": len(wq),
+            "local_writing_quality_defect_only": len(wq_defect_only),
             "grammar_errors_per_email": len(grammar),
             "spelling_errors_per_email": len(spelling),
             "structural_failures_pct": len(structural),
@@ -232,6 +244,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
                 "ptbr_leakage_pct": len(leakage_flags),
                 "wf_score": len(wf_vals),
                 "local_writing_quality": len(wq),
+                "local_writing_quality_defect_only": len(wq_defect_only),
             }.items() if count == 0
         } | (set() if throughput_available else {"throughput_emails_per_min", "tokens_per_second"})),
     }
@@ -264,6 +277,7 @@ def format_scorecard(summary: Dict[str, Any]) -> Dict[str, Any]:
             "structural_failures_pct": summary.get("structural_failures_pct"),
             "repetition_pct": summary.get("repetition_pct"),
             "local_writing_quality": summary.get("local_writing_quality"),
+            "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
         },
         "performance": {
             "latency_p50_ms": summary.get("latency_p50_ms"),

@@ -212,6 +212,21 @@ Keep the corrected generic placeholder detection and test it against a locked fi
 
 Review false positives involving ordinary bracketed prose, citations, URLs, and product notation.
 
+**Policy (why unfilled placeholders count as failures).** Detection of leftover
+template placeholders is a deliberate and strict instruction-adherence check, not an
+evaluator defect. When a task asks the model to address a specific recipient, company,
+or date, the prompt is unambiguously the source of truth; an unfilled `[Nome do
+Cliente]` means the output is not ready to send, however polished the surrounding
+prose. Counted placeholders therefore lower `instruction_adherence_pct` by design, and
+any unresolved `[bracket]` occurrence is reported as a failed criterion rather than
+silently tolerated. Two corollaries follow. First, the metric is scoped to bracketed
+template slots only: Markdown links, citations, and ordinary bracketed prose are
+masked so that legitimate content is never mistaken for an unfilled slot. Second, the
+correct response to a placeholder failure is prompt-side remediation (instruct the
+model to fill every field, or substitute the supplied entity), not weakening the
+detector; regression suites should keep the locked fixture set above to guarantee that
+detection stays strict for genuine slots and quiet for the masked look-alikes.
+
 ### 9. Semantic preservation
 
 Label the current metric accurately as deterministic fact-pattern coverage. It is not a general semantic or hallucination score.

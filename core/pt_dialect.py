@@ -297,6 +297,39 @@ def _mask_nonlexical_spans(text: str) -> str:
                 chars[index] = " "
     return "".join(chars)
 
+# URI scheme names (RFC 3986 §3.1 scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )).
+# A scheme name is a *protocol label* (http, https, ftp, wss, mailto, ...), not a
+# word of any human language: it is written identically in PT-PT, PT-BR, and every
+# other language. The bundled PT-BR dictionary happens to list a handful of these
+# labels (http, https, ftp, jar, pop, iris, ...) while the PT-PT one does not, so a
+# bare protocol mention such as "via https" would otherwise be reported as a PT-BR
+# leak purely because of that dictionary-coverage artifact. Because the tokens here
+# are protocol vocabulary — derived structurally from the IANA scheme registry, not
+# hand-picked Portuguese words — the lexical-contrast rule treats the whole class as
+# dialect-neutral. Ordinary words that coincide with a scheme name (e.g. data, pop)
+# lose nothing real: neither dialect spells them differently, so they carry no
+# dialect signal, and genuine PT-BR markers are unaffected.
+_URI_SCHEME_TOKENS = frozenset("""
+    about acap acct acd acr activity afp ahad ans apacheapi app apt ar ark attachment
+    aw aviator bb bbi bzr c2pa call cap chrome chrome-extension chrome-untrusted cid
+    civta clio cmis coffee content crid crs cvs data dav dab dc dct dns dnt doi dpp
+    drm dtn dvb dwl eid elsi beispiel enc esperanto eth ethereum evergreen facetime
+    fax feed file finger fish ftp ft fid geo gg git gopher graph gs gtalk h323 ham
+    http https hxt iax icap icon im imap info iot ipn ipp ips irc irc6 ircs iris
+    isostore itms jabber jar jms keyparc lastfm ldap ldaps leapinfo lore magnet
+    mailserver mailto maps market marker matrix mcpe me mid mms modem moz message
+    mongodb mtqp mumble mupdate mvn news nfs ni nih node nntp notes oauth ocf odds
+    oid onion openpgp4fpr opr otpauth pack palm paparazzi payto pkcs11 platform pop
+    pres prospero proxy psyc pwid pvp qb query1 r3d raidpn reload res resource rmip
+    rsync rtmfp rtmp rtsp rutracker s3 sar secret shaw shell sieve simplenote sips
+    skype smb smp sms smtp snews snmp soap soldat spotify ssh steam stun stuns
+    submit svn swh swid swr t agrt tel teliae telnet tftp things threema tip tis
+    tn3270 tool tv udp unreal upt urn ut2004 v-event vevent vemmi ventrilo ves
+    videotex view-source vnc wais webcal wsps wss wtai wyciwyg wys xcon xcon-userid
+    xfire xmlrpc xmpp xri ymsgr z39.50r z39.50s
+""".split())
+
+
 def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
     """Find lexical items recognized by pt_BR but not pt_PT using bundled dictionaries.
 
@@ -315,6 +348,9 @@ def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
     for token in re.findall(r"\b[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’\-][A-Za-zÀ-ÖØ-öø-ÿ]+)*\b", lexical_text, re.UNICODE):
         normalized = token.strip("-'’").lower()
         if len(normalized) < 3 or normalized in seen:
+            continue
+        if normalized in _URI_SCHEME_TOKENS:
+            # Protocol labels are dialect-neutral vocabulary (see _URI_SCHEME_TOKENS).
             continue
         seen.add(normalized)
         if ptbr.lookup(normalized) and not ptpt.lookup(normalized):

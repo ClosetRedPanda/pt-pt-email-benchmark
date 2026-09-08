@@ -14,6 +14,7 @@ DEFAULT_METRICS = (
     "ptbr_leakage_pct",
     "wf_score",
     "writing_quality_score",
+    "wq_defect_only_score",
 )
 
 

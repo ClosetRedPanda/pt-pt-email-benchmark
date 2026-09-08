@@ -275,7 +275,7 @@ def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List
 
 def _pretty_uncertainty(reports: List[Dict[str, Any]]) -> str:
     lines = ["", "=" * 72, "Paired uncertainty (second model minus first model)"]
-    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct", "writing_quality_score")
+    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct", "writing_quality_score", "wq_defect_only_score")
     for report in reports:
         lines.extend(["-" * 72, f"  {report['first']}  ->  {report['second']}"])
         metrics = report["statistics"]["metrics"]
@@ -314,9 +314,9 @@ def _json_comparison(
     metric_keys = (
         "instruction_adherence_pct", "semantic_preservation_pct",
         "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct",
-        "wf_score", "local_writing_quality", "latency_p50_ms",
-        "latency_p90_ms", "throughput_emails_per_min", "tokens_per_second",
-        "cost_per_1k_emails_usd",
+        "wf_score", "local_writing_quality", "local_writing_quality_defect_only",
+        "latency_p50_ms", "latency_p90_ms", "throughput_emails_per_min",
+        "tokens_per_second", "cost_per_1k_emails_usd",
     )
     deltas = {}
     if len(summaries) == 2:

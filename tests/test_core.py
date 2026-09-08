@@ -130,6 +130,57 @@ def test_lexical_contrasts_mask_structured_nonlexical_spans(monkeypatch):
     assert protected_fragments.isdisjoint(ptbr_spy.lookups)
     assert protected_fragments.isdisjoint(ptpt_spy.lookups)
 
+def test_lexical_contrasts_treat_bare_protocol_scheme_tokens_as_dialect_neutral():
+    # Issue 2 residual: bare protocol labels (https/http/ftp/...) are not words of
+    # either dialect. The bundled PT-BR dictionary happens to list a few of them
+    # while the PT-PT one does not, which used to report plain mentions such as
+    # "via https" as PT-BR leakage. Scheme names are dialect-neutral by
+    # construction, so no flag may be raised for them.
+    assert check_lexical_contrasts("O acesso ao email via https ou http.") == []
+    assert check_lexical_contrasts("O servidor antigo usa apenas ftp.") == []
+    # A genuine lexical contrast in the same sentence is still reported.
+    contexts = [
+        issue["context"]
+        for issue in check_lexical_contrasts("Envie o relatorio pela intranet via https.")
+    ]
+    assert "intranet" in contexts
+    assert "https" not in contexts
+
+
+def test_wq_defect_only_score_aggregated_alongside_calibrated_score():
+    # Issue 3: writing_quality_score is calibration-capped below 100 for clean
+    # text, which compresses model differences in the flawless range. The
+    # defect-only counterpart keeps the full range; the scorecard must surface it.
+    s = build_elaboration_scorecard([
+        {
+            'status': 'success', 'target_lang': 'pt-pt', 'latency_ms': 10,
+            'instruction_adherence_pct': 90, 'semantic_preservation_pct': 90,
+            'writing_quality_score': 91.5, 'wq_defect_only_score': 100.0,
+        },
+        {
+            'status': 'success', 'target_lang': 'pt-pt', 'latency_ms': 10,
+            'writing_quality_score': 70.0, 'wq_defect_only_score': 82.0,
+        },
+    ])
+    assert s['local_writing_quality'] == pytest.approx(80.75)
+    assert s['local_writing_quality_defect_only'] == pytest.approx(91.0)
+    assert s['denominators']['local_writing_quality_defect_only'] == 2
+    formatted = format_scorecard(s)
+    assert formatted['writing']['local_writing_quality_defect_only'] == pytest.approx(91.0)
+    assert 'local_writing_quality_defect_only' in formatted['writing']
+
+
+def test_scorecard_defect_only_writing_metric_unavailable_without_evidence():
+    s = build_elaboration_scorecard([{'status': 'success', 'latency_ms': 10}])
+    assert s['local_writing_quality_defect_only'] is None
+    assert 'local_writing_quality_defect_only' in s['unavailable_metrics']
+
+
+def test_wq_defect_only_score_included_in_default_pairwise_metrics():
+    from core.statistics import DEFAULT_METRICS
+    assert "wq_defect_only_score" in DEFAULT_METRICS
+
+
 def test_wf_does_not_depend_on_classifier_probability():
     d={'pt_dialect_score': 0.01, 'violations': [], 'ptpt_compliance_pct': 100, 'ptbr_leakage_detected': False}
     wf=compute_word_fidelity_from_dialect('A equipa enviou o documento.', d)
