@@ -195,6 +195,43 @@ def test_wq_defect_only_score_is_the_primary_writing_metric():
     assert list(formatted["writing"])[0] == "local_writing_quality_defect_only"
 
 
+def test_full_rescore_recomputes_legacy_rows_with_current_evaluators():
+    # compare.py --rescore must actually re-evaluate stored content. Legacy rows
+    # keep frozen pre-fix values (URLs/protocol tokens flagged as PT-BR leaks, no
+    # top-level wq_defect_only_score), so a rescore that only backfills None
+    # fields is a silent no-op. After a full rescore those rows must show current
+    # compliance/leakage and both writing-quality scores at the top level.
+    from compare import _full_rescore_generation_records
+    legacy = [
+        {
+            "id": "t1", "model": "m", "status": "success", "target_lang": "pt-pt",
+            "content": "Boa tarde,\n\nJunte-se em https://meet.google.com/abc-defg-hij amanha.\n\nCumprimentos",
+            "ptpt_compliance_pct": 0.0, "ptbr_leakage_detected": True, "wf_score": 98.0,
+            "writing_quality_score": 91.5, "writing_quality": {"writing_quality_score": 91.5},
+        },
+        {
+            "id": "t2", "model": "m", "status": "success", "target_lang": "pt-pt",
+            "content": "Envie o relatorio pela intranet da empresa, por favor.",
+            "ptpt_compliance_pct": 0.0, "ptbr_leakage_detected": True, "wf_score": 95.0,
+        },
+        {"id": "t3", "model": "m", "status": "error", "error": "provider boom", "content": ""},
+    ]
+    rows = _full_rescore_generation_records(legacy, use_languagetool=False)
+    by_id = {row["id"]: row for row in rows}
+    # URL row: no longer a leak under current masking; both WQ scores populated.
+    assert by_id["t1"]["ptbr_leakage_detected"] is False
+    assert by_id["t1"]["ptpt_compliance_pct"] == 100.0
+    assert isinstance(by_id["t1"]["wq_defect_only_score"], (int, float))
+    assert isinstance(by_id["t1"]["writing_quality_score"], (int, float))
+    assert "wq_defect_only_score" in (by_id["t1"].get("writing_quality") or {})
+    # Genuine lexical contrast must still be detected after a rescore.
+    assert by_id["t2"]["ptbr_leakage_detected"] is True
+    assert by_id["t2"]["ptpt_compliance_pct"] == 0.0
+    # Failed rows are copied unchanged (no invented scores).
+    assert by_id["t3"]["status"] == "error"
+    assert "wq_defect_only_score" not in by_id["t3"]
+
+
 def test_wf_does_not_depend_on_classifier_probability():
     d={'pt_dialect_score': 0.01, 'violations': [], 'ptpt_compliance_pct': 100, 'ptbr_leakage_detected': False}
     wf=compute_word_fidelity_from_dialect('A equipa enviou o documento.', d)

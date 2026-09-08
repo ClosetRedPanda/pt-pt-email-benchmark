@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from compare import _enrich_generation_records
+from compare import _full_rescore_generation_records
 from config import BENCHMARK_VERSION, ELABORATION_PROMPTS
 from core.artifacts import (
     ArtifactValidationError,
@@ -37,7 +37,7 @@ def main() -> int:
     if args.source.resolve() == args.destination.resolve():
         parser.error("source and destination must be different")
 
-    rows = _enrich_generation_records(
+    rows = _full_rescore_generation_records(
         read_jsonl(args.source),
         use_languagetool=args.full_dialect_checks,
     )

@@ -9,6 +9,7 @@ from core.scorecard import build_elaboration_scorecard
 from core.statistics import paired_bootstrap
 from core.pt_dialect import evaluate_pt_dialect
 from core.wf_fidelity import compute_word_fidelity_from_dialect
+from core.writing_quality import evaluate_writing_quality
 from core.artifacts import ArtifactValidationError, load_manifest, validate_rows
 from runner import read_jsonl, score_analysis
 from config import ANALYSIS_REFERENCE, ELABORATION_PROMPTS, BENCHMARK_VERSION
@@ -120,6 +121,76 @@ def _enrich_generation_records(rows: List[Dict[str, Any]], *, use_languagetool: 
                 "dialect_evaluation": dialect,
                 "wf_evaluation": wf,
             })
+        enriched.append(result)
+    return enriched
+
+
+def _wq_language_for(result: Dict[str, Any]) -> str:
+    """Map a row's target language to the evaluator's language tag."""
+    target = str(result.get("target_lang", "")).strip().lower()
+    return "pt-PT" if target.startswith("pt") else "en-US"
+
+
+def _full_rescore_generation_records(
+    rows: List[Dict[str, Any]],
+    *,
+    use_languagetool: bool = False,
+) -> List[Dict[str, Any]]:
+    """Re-evaluate every scoreable row with the current evaluator code.
+
+    This is the rescorer behind ``compare.py --rescore``. Unlike
+    ``_enrich_generation_records`` — which only backfills *missing* dialect/WF
+    fields and never touches writing quality — this recomputes, for every
+    successful row with stored content:
+
+    - PT dialect evaluation and word fidelity (PT-PT rows), replacing the frozen
+      legacy values, so artifacts scored before the Issue 2 URL/protocol-masking
+      fix get fresh compliance/leakage numbers;
+    - writing quality in both flavours, writing both ``wq_defect_only_score``
+      and ``writing_quality_score`` at the top level (and the nested
+      ``writing_quality`` dict), so scorecards stop reporting the primary
+      metric as unavailable on legacy rows.
+
+    Failed rows and rows without content are copied unchanged. The method never
+    calls an LLM or the network; only the local deterministic evaluators run.
+    """
+    enriched = []
+    for row in rows:
+        result = dict(row)
+        content = result.get("content")
+        if (
+            result.get("status", "success") != "success"
+            or result.get("error")
+            or not isinstance(content, str)
+            or not content.strip()
+        ):
+            enriched.append(result)
+            continue
+        text = str(content)
+        is_ptpt = str(result.get("target_lang", "")).strip().lower() == "pt-pt"
+        if is_ptpt:
+            dialect = evaluate_pt_dialect(text, use_languagetool=use_languagetool)
+            wf = compute_word_fidelity_from_dialect(text, dialect)
+            result.update({
+                "pt_dialect_score": dialect.get("pt_dialect_score"),
+                "euptvid_probability": dialect.get("euptvid_prob"),
+                "ptpt_compliance_pct": dialect.get("ptpt_compliance_pct"),
+                "ptpt_compliance_graded_pct": dialect.get("ptpt_compliance_graded_pct"),
+                "ptbr_leakage_detected": dialect.get("ptbr_leakage_detected"),
+                "wf_score": wf.get("wf_score"),
+                "dialect_evaluation": dialect,
+                "wf_evaluation": wf,
+            })
+        wq = evaluate_writing_quality(
+            text,
+            language=_wq_language_for(result),
+            use_languagetool=use_languagetool,
+        )
+        result.update({
+            "writing_quality": wq,
+            "writing_quality_score": wq.get("writing_quality_score"),
+            "wq_defect_only_score": wq.get("wq_defect_only_score"),
+        })
         enriched.append(result)
     return enriched
 
@@ -362,12 +433,12 @@ def main() -> None:
     parser.add_argument(
         "--rescore",
         action="store_true",
-        help="recompute missing legacy evaluator fields from stored content",
+        help="re-evaluate stored content with current evaluators (dialect, word fidelity, and both writing-quality scores)",
     )
     parser.add_argument(
         "--full-dialect-checks",
         action="store_true",
-        help="use LanguageTool while backfilling legacy dialect fields (slower)",
+        help="use LanguageTool while re-scoring legacy dialect fields (slower)",
     )
     parser.add_argument(
         "--allow-legacy",
@@ -385,7 +456,7 @@ def main() -> None:
         for path, manifest in zip(args.results, manifests):
             rows = read_jsonl(path)
             if args.rescore:
-                rows = _enrich_generation_records(rows, use_languagetool=args.full_dialect_checks)
+                rows = _full_rescore_generation_records(rows, use_languagetool=args.full_dialect_checks)
             summary = build_elaboration_scorecard(rows)
             summary["artifact_provenance"] = (
                 "legacy exploratory rescore" if args.rescore
