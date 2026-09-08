@@ -59,6 +59,37 @@ def test_generation_ignores_markdown_link_labels():
     assert out['adherence_details']['placeholder_count'] == 0
 
 
+def test_placeholder_detection_covers_locked_fixtures_generically():
+    # REL-03: every Title-Case fixture in the roadmap's locked placeholder set
+    # must be detected by the *generic* structural detector (no echo from the
+    # source text), including slots with lowercase connectors such as
+    # "[Nome do Cliente]". Note: all-lowercase "[inserir endereço]" is not
+    # generically distinguishable from ordinary prose by structure alone and
+    # remains only detectable when echoed from the source.
+    fixtures = [
+        '[Seu Nome]', '[Empresa]', '[Contato]', '[Nome do Cliente]',
+        '[XXXX-XX-XX]', '[Nome Da Empresa]', '[Nome do Cliente e do Contato]',
+    ]
+    for fixture in fixtures:
+        out = evaluate_generation_output(
+            f'Boa tarde, {fixture}.\n\nCumprimentos', {}, 'Responder ao cliente.'
+        )
+        assert out['adherence_details']['placeholder_count'] >= 1, fixture
+
+
+def test_placeholder_detection_ignores_citations_and_lowercase_prose():
+    # Citations, years, all-lowercase bracketed prose and markdown links are
+    # not template slots and must never be penalised.
+    for text in [
+        'Segundo o relatorio [1], o valor foi pago.',
+        'Conforme [2024], o contrato renovou.',
+        'Consulte [ver anexo] para detalhes.',
+        'Consulte [a política](https://example.com/politica).',
+    ]:
+        out = evaluate_generation_output(text, {}, 'Responder ao cliente.')
+        assert out['adherence_details']['placeholder_count'] == 0, text
+
+
 def test_generation_mutations_are_detected():
     constraints = {
         'required_actions': [{'action_id': 'confirmar_envio', 'pattern': r'confirm\w* o envio'}],
@@ -244,6 +275,61 @@ def test_wq_is_structural_and_deterministic():
     b=evaluate_writing_quality(text, language='pt-PT', use_languagetool=False)
     assert a['writing_quality_score'] == b['writing_quality_score']
     assert 'grammar_error_count' in a and 'structural_issue_count' in a
+
+
+def test_spelling_accepts_vocabulary_missing_from_one_pt_dictionary():
+    # REL-06: spelling is orthography, not dialect. Words that are absent from
+    # the bundled pt_PT dictionary but present in the pt_BR dictionary (or vice
+    # versa) are correct Portuguese orthography and must not be reported as
+    # spelling errors — the dialect layer judges dialect, the spelling layer
+    # judges spelling. Real typos (absent from both) are still reported.
+    text = ('Boa tarde,\n\nO estorno e o voucher foram registados na intranet '
+            'e o minibar do hotel está incluído.\n\nCumprimentos')
+    result = evaluate_writing_quality(text, language='pt-PT', use_languagetool=False)
+    assert result['spelling_error_count'] == 0, result['wq_violations']
+
+
+def test_spelling_still_flags_true_misspellings():
+    # Diacritic-loss misspelling ("confirmacao" for "confirmação") remains a
+    # spelling error even though both dictionaries were consulted.
+    result = evaluate_writing_quality(
+        'Boa tarde,\n\nA confirmacao do pedido segue em anexo.\n\nCumprimentos',
+        language='pt-PT', use_languagetool=False,
+    )
+    assert result['spelling_error_count'] >= 1, result['wq_violations']
+
+
+def test_scorecard_grammar_unavailable_without_languagetool():
+    # REL-07: without a LanguageTool backend, grammar counts are structural
+    # zeros and must not be reported as a measured "0 errors per email".
+    rows = [{
+        'status': 'success',
+        'writing_quality': {
+            'languagetool_api_used': False,
+            'grammar_error_count': 0,
+            'spelling_error_count': 0,
+        },
+    } for _ in range(2)]
+    s = build_elaboration_scorecard(rows)
+    assert s['languagetool_available'] is False
+    assert s['avg_grammar_errors_per_email'] is None
+    assert 'grammar_errors_per_email' in s['unavailable_metrics']
+    assert s['denominators']['grammar_errors_per_email'] == 0
+
+
+def test_scorecard_grammar_reported_when_languagetool_responded():
+    rows = [{
+        'status': 'success',
+        'writing_quality': {
+            'languagetool_api_used': True,
+            'grammar_error_count': count,
+            'spelling_error_count': 0,
+        },
+    } for count in (2, 4)]
+    s = build_elaboration_scorecard(rows)
+    assert s['languagetool_available'] is True
+    assert s['avg_grammar_errors_per_email'] == 3.0
+    assert 'grammar_errors_per_email' not in s['unavailable_metrics']
 
 
 def test_cost_unknown_is_not_zero():

@@ -13,7 +13,19 @@ from typing import Dict, Any, List, Optional, Tuple
 # 2. Structural slot syntax: [X...], [___...], [...], [ALL_CAPS], or [Title Case Slot] (e.g. [Seu Nome], [Nome])
 _SOURCE_SLOT_RE = re.compile(r"\[[^\]\n]{1,200}\]", re.UNICODE)
 _STRUCTURAL_SLOT_RE = re.compile(
-    r"\[(?:\s*[_Xx.-]{2,}\s*|\.{3,}|_{2,}|(?:[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ0-9_-]*\s*)+)\]",
+    r"\[(?:"
+    r"\s*[_Xx.-]{2,}\s*"  # blank runs: [__...], [XX...], [X.......]
+    r"|\.{3,}"  # ellipsis-style blank: [...]
+    r"|_{2,}"  # underscore blank: [___]
+    # Title-Case words, each capital-initial: [Seu Nome], [XXXX-XX-XX], [Empresa]
+    r"|(?:[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ0-9_-]*\s*)+"
+    # Title-Case slot with lowercase closed-class connectors between the
+    # capitalised words: [Nome do Cliente], [Nome do Cliente e do Contato].
+    # The connector is bounded structurally (1-3 lowercase letters), not by a
+    # word list, so genuine slots like "[Nome do Cliente]" are detected while
+    # all-lowercase prose ("[ver anexo]") is not.
+    r"|[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ0-9_-]*(?:\s+(?:[a-zà-öø-ÿ]{1,3}\s+)*[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ0-9_-]*)+"
+    r")\]",
     re.UNICODE,
 )
 

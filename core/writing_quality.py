@@ -688,6 +688,20 @@ def detect_local_spelling_issues(text: str, language: str) -> List[Dict[str, Any
     checker = _load_spellchecker(language)
     if not checker:
         return []
+    # REL-06: spelling is orthography, not dialect. The bundled pt_PT and pt_BR
+    # dictionaries have different coverage philosophy (e.g. pt_BR derives
+    # "intranet" via prefix rules that pt_PT lacks), so a word absent from one
+    # Portuguese dictionary is not a misspelling — the dialect layer, not the
+    # spelling layer, is responsible for judging dialect. A token accepted by
+    # the *other* Portuguese dictionary is therefore not reported as a
+    # spelling error. Real typos ("intrranet") are absent from both and are
+    # still reported.
+    lang_key = (language or "").strip().lower()
+    alt_checker = None
+    if lang_key.startswith("pt-pt"):
+        alt_checker = _load_spellchecker("pt-BR")
+    elif lang_key.startswith("pt-br"):
+        alt_checker = _load_spellchecker("pt-PT")
     issues: List[Dict[str, Any]] = []
     seen: set[str] = set()
     protected = _protected_spans(text)
@@ -716,6 +730,13 @@ def detect_local_spelling_issues(text: str, language: str) -> List[Dict[str, Any
         # A sentence-initial token is checked on its lowercase form too: the
         # capital is positional, so "Confirmo" must be judged as "confirmo".
         if not token.islower() and _spellchecker_lookup(checker, token.lower()):
+            continue
+        # Cross-dialect acceptance (see note at the top of this function):
+        # recognised Portuguese orthography in either bundled dictionary is not
+        # a spelling defect, whatever its dialect colour.
+        if alt_checker is not None and _spellchecker_lookup(alt_checker, token):
+            continue
+        if alt_checker is not None and not token.islower() and _spellchecker_lookup(alt_checker, token.lower()):
             continue
         suggestions = _spellchecker_suggestions(checker, token)
         folded_match = folded_dict.get(_fold_diacritics(token))

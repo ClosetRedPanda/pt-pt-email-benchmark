@@ -258,6 +258,7 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
             "ptpt": {
                 "euptvid_probability": summary.get("euptvid_probability"),
                 "ptpt_compliance_pct": summary.get("ptpt_compliance_pct"),
+                "ptpt_compliance_graded_pct": summary.get("ptpt_compliance_graded_pct"),
                 "ptbr_leakage_pct": summary.get("ptbr_leakage_pct"),
                 "wf_score": summary.get("wf_score"),
             },
@@ -308,14 +309,16 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
         "-" * 72,
         *_render_sections(sections),
     ]
+    if kind == "generation" and summary.get("languagetool_available") is False:
+        lines.append("  Note: no LanguageTool backend responded, so grammar evidence was unavailable and")
+        lines.append("        grammar_errors_per_email is reported as N/A (not as a measured zero).")
     denominators = summary.get("denominators") or {}
     if denominators:
         lines.extend(["", "  Metric denominators: " + ", ".join(
             f"{key}={value}" for key, value in sorted(denominators.items())
         )])
     if kind == "generation":
-        dialect_statuses = {
-            str((row.get("dialect_evaluation") or {}).get("language_adherence_status"))
+        dialect_statuses = {            str((row.get("dialect_evaluation") or {}).get("language_adherence_status"))
             for row in rows
         }
         if (
@@ -454,6 +457,12 @@ def main() -> None:
     summaries = []
     if args.kind == "generation":
         for path, manifest in zip(args.results, manifests):
+            if manifest.get("legacy") and not args.rescore:
+                print(
+                    f"[warning] {path.name}: legacy artifact with per-row values frozen at creation time. "
+                    "Pass --rescore to re-evaluate stored content with the current evaluators.",
+                    file=sys.stderr,
+                )
             rows = read_jsonl(path)
             if args.rescore:
                 rows = _full_rescore_generation_records(rows, use_languagetool=args.full_dialect_checks)

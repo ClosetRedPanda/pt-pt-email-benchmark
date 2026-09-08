@@ -182,7 +182,18 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     # compresses. Aggregate and surface both so the unambiguous one is comparable.
     wq_defect_only = [r.get("wq_defect_only_score") for r in successful if r.get("wq_defect_only_score") is not None]
     writing_details = [r.get("writing_quality") or {} for r in successful]
+    # REL-07: grammar counts exist only when a LanguageTool backend responded for
+    # at least one row. When it did not, every row carries a structural 0, so the
+    # old behaviour printed "grammar_errors_per_email = 0" with a full denominator
+    # — indistinguishable from genuinely error-free text and silently different
+    # across environments. Grammar is reported as unavailable (N/A) unless LT
+    # evidence exists, and `languagetool_available` is surfaced so reports warn.
+    grammar_checked = any(
+        isinstance(d, dict) and bool(d.get("languagetool_api_used")) for d in writing_details
+    )
     grammar = [d.get("grammar_error_count") for d in writing_details if d.get("grammar_error_count") is not None]
+    if not grammar_checked:
+        grammar = []
     spelling = [d.get("spelling_error_count") for d in writing_details if d.get("spelling_error_count") is not None]
     repetition = [d.get("repetition_count") for d in writing_details if d.get("repetition_count") is not None]
     structural = [d.get("structural_issue_count") for d in writing_details if d.get("structural_issue_count") is not None]
@@ -203,6 +214,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "wf_score": _mean(wf_vals),
         "local_writing_quality_defect_only": _mean(wq_defect_only),
         "local_writing_quality": _mean(wq),
+        "languagetool_available": grammar_checked,
         "avg_grammar_errors_per_email": _mean(grammar),
         "avg_spelling_errors_per_email": _mean(spelling),
         "structural_failures_pct": (sum(value > 0 for value in structural) / len(structural) * 100.0) if structural else None,
@@ -248,6 +260,7 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
                 "wf_score": len(wf_vals),
                 "local_writing_quality": len(wq),
                 "local_writing_quality_defect_only": len(wq_defect_only),
+                "grammar_errors_per_email": len(grammar),
             }.items() if count == 0
         } | (set() if throughput_available else {"throughput_emails_per_min", "tokens_per_second"})),
     }
