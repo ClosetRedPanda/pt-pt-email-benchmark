@@ -661,6 +661,29 @@ def _spellchecker_suggestions(checker: Any, word: str) -> List[str]:
     return []
 
 
+# A sentence boundary: start of text, or terminal/segmenting punctuation and a
+# newline, followed by whitespace. Capitalisation after these positions is
+# required by orthography rather than chosen, which is what makes it safe to
+# spell-check the token in lowercase form.
+_SENTENCE_INITIAL_RE = re.compile(r"(?:^|[.!?:;\n]\s*)$")
+
+
+def _capitalisation_is_positional(text: str, match: "re.Match[str]") -> bool:
+    """True when a capitalised token's capital is forced by sentence position.
+
+    All-caps tokens are excluded: that is a distinct orthographic shape
+    (acronym/emphasis), not sentence capitalisation. A token immediately
+    followed by "." is excluded as an abbreviation shape, since the period is
+    part of the token rather than a sentence terminator.
+    """
+    token = match.group(0)
+    if token.isupper():
+        return False
+    if text[match.end():match.end() + 1] == ".":
+        return False
+    return bool(_SENTENCE_INITIAL_RE.search(text[:match.start()]))
+
+
 def detect_local_spelling_issues(text: str, language: str) -> List[Dict[str, Any]]:
     checker = _load_spellchecker(language)
     if not checker:
@@ -673,9 +696,26 @@ def detect_local_spelling_issues(text: str, language: str) -> List[Dict[str, Any
         if _span_overlaps(protected, match.start(), match.end()):
             continue
         token = match.group(0)
-        if len(token) < 4 or not token.islower() or token.lower() in seen:
+        if len(token) < 4 or token.lower() in seen:
+            continue
+        if not token.islower() and not _capitalisation_is_positional(text, match):
+            # FIX (P1.4): the detector previously skipped every capitalised
+            # token, so a misspelling in the first word of a sentence was
+            # invisible and `spelling_error_count` was understated.
+            #
+            # Capitalised tokens cannot simply be checked: proper nouns absent
+            # from the Hunspell dictionary would be reported as misspellings.
+            # The distinction used here is orthographic, not lexical -- at a
+            # sentence boundary capitalisation is *forced* by punctuation and
+            # therefore carries no proper-noun signal, so the token can be
+            # checked on its lowercase form. Elsewhere capitalisation is a
+            # deliberate choice and is left alone. No name list is involved.
             continue
         if _spellchecker_lookup(checker, token):
+            continue
+        # A sentence-initial token is checked on its lowercase form too: the
+        # capital is positional, so "Confirmo" must be judged as "confirmo".
+        if not token.islower() and _spellchecker_lookup(checker, token.lower()):
             continue
         suggestions = _spellchecker_suggestions(checker, token)
         folded_match = folded_dict.get(_fold_diacritics(token))

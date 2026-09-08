@@ -518,6 +518,8 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
             "ptbr_leakage_detected": None,
             "pt_dialect_score": None,
             "violation_count": 0,
+            "ptbr_violation_count": 0,
+            "ptbr_candidate_count": 0,
             "violations": [],
             "languagetool_api_used": False
         }
@@ -559,6 +561,11 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
             "ptbr_leakage_detected": False,
             "pt_dialect_score": 0.0,
             "violation_count": 1,
+            # P3.1: every branch reports the same keys. The single violation
+            # here is a language-adherence failure, not PT-BR leakage, so the
+            # PT-BR-specific counters are explicitly zero rather than absent.
+            "ptbr_violation_count": 0,
+            "ptbr_candidate_count": 0,
             "violations": [{
                 "source": "Language Verification",
                 "rule_id": "PT_INPUT_ENGLISH_OUTPUT",

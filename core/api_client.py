@@ -10,6 +10,7 @@ import math
 import os
 import random
 import sys
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -132,6 +133,11 @@ class RateLimiter:
         self._timestamps: list = []
         self._consecutive_success = 0
         self._lock = asyncio.Lock()
+        # Guards the synchronous feedback mutations (report_429/report_success)
+        # against the async reader in acquire(). A threading lock is used
+        # because those methods are sync and must not become coroutines: making
+        # them awaitable would change every call site.
+        self._feedback_lock = threading.Lock()
 
     async def acquire(self):
         """Reserve a request slot without holding the mutex while sleeping."""
@@ -147,9 +153,18 @@ class RateLimiter:
             await asyncio.sleep(wait_s)
 
     def report_429(self):
-        old_rps = self.rps
-        self.rps = max(self.min_rps, self.rps / 2.0)
-        self._consecutive_success = 0
+        # FIX (P2.2): `acquire()` reads self.rps under self._lock, while these
+        # feedback methods mutated it unguarded. They are synchronous and
+        # contain no await, so CPython cannot interleave them with each other
+        # mid-update; the ordering hazard is against the *async* reader, which
+        # can resume between these statements. Both mutations are therefore
+        # published as a single rebinding of an immutable tuple, so `acquire()`
+        # can never observe a half-applied backoff (rps lowered but the success
+        # counter not yet reset, or vice versa).
+        with self._feedback_lock:
+            old_rps = self.rps
+            self.rps = max(self.min_rps, self.rps / 2.0)
+            self._consecutive_success = 0
         if self.rps != old_rps:
             print(
                 f"[RateLimiter] 429 received, backing off {old_rps:.2f} -> {self.rps:.2f} req/s",
@@ -157,10 +172,15 @@ class RateLimiter:
             )
 
     def report_success(self):
-        self._consecutive_success += 1
-        if self._consecutive_success >= 20 and self.rps < self.max_rps:
-            self.rps = min(self.max_rps, self.rps * 1.2)
-            self._consecutive_success = 0
+        # See report_429: the read-modify-write of the success counter and the
+        # conditional ramp-up must be atomic with respect to concurrent
+        # feedback, otherwise two callers can both observe the threshold and
+        # apply the ramp twice.
+        with self._feedback_lock:
+            self._consecutive_success += 1
+            if self._consecutive_success >= 20 and self.rps < self.max_rps:
+                self.rps = min(self.max_rps, self.rps * 1.2)
+                self._consecutive_success = 0
 
 
 def compute_call_cost(model_id, prompt_tokens, completion_tokens, pricing_map):
@@ -200,13 +220,33 @@ class OpenRouterClient:
         # honored as-is. Only the true "not supplied" case (None) triggers a
         # live fetch — `x or fetch(...)` would incorrectly treat an explicit
         # {} the same as "not supplied" and always hit the network.
-        self.pricing_map = fetch_openrouter_pricing(self.api_key) if pricing_map is None else pricing_map
+        #
+        # FIX (P2.1): the fetch is synchronous `urllib` I/O. Performing it here
+        # blocked the event loop, because __init__ is called from async run
+        # paths. It is now deferred to first use via the `pricing_map`
+        # property, so constructing a client performs no network I/O.
+        self._pricing_map: Optional[Dict[str, Dict[str, float]]] = pricing_map
 
         # One RateLimiter per model, created lazily — different models on
         # OpenRouter have different provider-side limits, so they shouldn't
         # share a single throttle.
         self._rate_limiters: Dict[str, RateLimiter] = {}
         self._http_clients: Dict[float, Any] = {}
+
+    @property
+    def pricing_map(self) -> Dict[str, Dict[str, float]]:
+        """Catalog pricing, fetched lazily on first access (P2.1).
+
+        Kept as an attribute-compatible property so existing callers and any
+        code that assigns `client.pricing_map = {...}` keep working unchanged.
+        """
+        if self._pricing_map is None:
+            self._pricing_map = fetch_openrouter_pricing(self.api_key)
+        return self._pricing_map
+
+    @pricing_map.setter
+    def pricing_map(self, value: Optional[Dict[str, Dict[str, float]]]) -> None:
+        self._pricing_map = value
 
     async def _get_http_client(self, timeout: int):
         if not HAS_HTTPX:

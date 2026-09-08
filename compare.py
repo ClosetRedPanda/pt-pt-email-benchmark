@@ -275,7 +275,7 @@ def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List
 
 def _pretty_uncertainty(reports: List[Dict[str, Any]]) -> str:
     lines = ["", "=" * 72, "Paired uncertainty (second model minus first model)"]
-    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_detected", "writing_quality_score")
+    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptbr_leakage_pct", "writing_quality_score")
     for report in reports:
         lines.extend(["-" * 72, f"  {report['first']}  ->  {report['second']}"])
         metrics = report["statistics"]["metrics"]

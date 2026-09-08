@@ -11,7 +11,7 @@ DEFAULT_METRICS = (
     "semantic_preservation_pct",
     "euptvid_probability",
     "ptpt_compliance_pct",
-    "ptbr_leakage_detected",
+    "ptbr_leakage_pct",
     "wf_score",
     "writing_quality_score",
 )
@@ -19,7 +19,12 @@ DEFAULT_METRICS = (
 
 def _number(value: Any) -> Optional[float]:
     if isinstance(value, bool):
-        return float(value)
+        # P3.3: a boolean is a 0/1 indicator. Bootstrapping its mean is a
+        # legitimate *rate* difference (percentage points of leaked responses),
+        # but reporting it under a bare boolean name invites reading it as a
+        # truth value. It is scaled to a percentage here and surfaced under an
+        # explicit "_pct" metric name so the units are unambiguous.
+        return 100.0 * float(value)
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -40,11 +45,19 @@ def _percentile(values: List[float], percentile: float) -> Optional[float]:
     return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
+# Metrics whose published name differs from the per-row field they derive from.
+_METRIC_SOURCE_FIELDS = {"ptbr_leakage_pct": "ptbr_leakage_detected"}
+
+
 def _paired_differences(
     first_rows: Iterable[Dict[str, Any]],
     second_rows: Iterable[Dict[str, Any]],
     metric: str,
 ) -> List[float]:
+    # P3.3: `ptbr_leakage_pct` is the rate view of the per-row boolean
+    # `ptbr_leakage_detected`. Map the reported metric name back to the field
+    # actually stored on each row.
+    source_field = _METRIC_SOURCE_FIELDS.get(metric, metric)
     first = {str(row.get("id")): row for row in first_rows if row.get("id") is not None}
     second = {str(row.get("id")): row for row in second_rows if row.get("id") is not None}
     differences = []
@@ -55,8 +68,8 @@ def _paired_differences(
             continue
         if right.get("status", "success") != "success" or right.get("error"):
             continue
-        left_value = _number(left.get(metric))
-        right_value = _number(right.get(metric))
+        left_value = _number(left.get(source_field))
+        right_value = _number(right.get(source_field))
         if left_value is not None and right_value is not None:
             differences.append(right_value - left_value)
     return differences

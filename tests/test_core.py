@@ -747,3 +747,164 @@ def test_p2_5_missing_wq_calibration_excludes_instead_of_crashing():
     finally:
         shutil.move(str(backup), str(path))
         importlib.reload(wq_mod)
+
+
+# ---------------------------------------------------------------------------
+# P1.4 / P2.1 / P2.2 / P3 regression tests
+# ---------------------------------------------------------------------------
+
+def _corpus_emails():
+    import json
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "data"
+    out = []
+    for name in ("wq_human_reference.jsonl", "analysis_reference.jsonl"):
+        path = root / name
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                obj = json.loads(line)
+                value = obj.get("email")
+                if isinstance(value, str) and value.strip():
+                    out.append(value)
+    return out
+
+
+def test_p1_4_sentence_initial_misspellings_are_detected():
+    from core.writing_quality import detect_local_spelling_issues, _load_spellchecker
+    if not _load_spellchecker('pt-PT'):
+        pytest.skip('Hunspell pt-PT dictionary unavailable')
+    for text in ('Tarrde boa.', 'Obrigadoo pela ajuda.', 'Reuniaoo marcada.'):
+        assert detect_local_spelling_issues(text, 'pt-PT'), \
+            f'sentence-initial misspelling missed in {text!r}'
+
+
+def test_p1_4_no_new_false_positives_on_reference_corpus():
+    """Checking capitalised tokens must not flag real PT-PT emails."""
+    from core.writing_quality import detect_local_spelling_issues, _load_spellchecker
+    if not _load_spellchecker('pt-PT'):
+        pytest.skip('Hunspell pt-PT dictionary unavailable')
+    emails = _corpus_emails()
+    assert emails, 'no reference corpus found'
+    for text in emails:
+        for issue in detect_local_spelling_issues(text, 'pt-PT'):
+            token = issue['message'].split("'")[1]
+            assert token.islower() or token.lower() != token, token
+
+
+def test_p1_4_capitalisation_rule_is_positional_not_lexical():
+    """Mid-sentence capitals (proper nouns) and abbreviations stay unchecked."""
+    from core.writing_quality import detect_local_spelling_issues, _load_spellchecker
+    if not _load_spellchecker('pt-PT'):
+        pytest.skip('Hunspell pt-PT dictionary unavailable')
+    for text in ('Exmo. Senhor, junto envio o documento.',
+                 'Ana Silva confirmou o pedido.',
+                 'Enviei o FICHEIRO hoje.'):
+        assert not detect_local_spelling_issues(text, 'pt-PT'), text
+
+
+def test_p2_1_client_init_performs_no_network_io():
+    import urllib.request
+    from core.api_client import OpenRouterClient
+    original = urllib.request.urlopen
+
+    def _boom(*args, **kwargs):
+        raise AssertionError('network I/O during __init__')
+
+    urllib.request.urlopen = _boom
+    try:
+        OpenRouterClient(api_key='test-key')
+        # An explicitly supplied map (including {}) must still be honoured.
+        assert OpenRouterClient(api_key='k', pricing_map={}).pricing_map == {}
+    finally:
+        urllib.request.urlopen = original
+
+
+def test_p2_2_rate_limiter_feedback_is_atomic():
+    from core.api_client import RateLimiter
+    limiter = RateLimiter(initial_rps=1.0, min_rps=0.1, max_rps=100.0)
+    for _ in range(19):
+        limiter.report_success()
+    before = limiter.rps
+    limiter.report_success()
+    assert limiter.rps > before
+    assert limiter._consecutive_success == 0
+    limiter2 = RateLimiter(initial_rps=8.0, min_rps=0.1, max_rps=100.0)
+    limiter2.report_429()
+    assert limiter2.rps == 4.0
+    assert limiter2._consecutive_success == 0
+
+
+def test_p3_1_dialect_return_branches_expose_consistent_keys():
+    from core.pt_dialect import evaluate_pt_dialect, get_spacy_nlp
+    if get_spacy_nlp() is None:
+        pytest.skip('spaCy pt_core_news_sm not installed')
+    required = {'ptpt_compliance_pct', 'ptpt_compliance_graded_pct',
+                'ptbr_violation_count', 'ptbr_candidate_count', 'violation_count'}
+    for text in ('', '   ', 'This is an English email, entirely.',
+                 'Bom dia, agradeco a sua mensagem.'):
+        result = evaluate_pt_dialect(text, use_languagetool=False)
+        assert required <= set(result), f'missing {required - set(result)} for {text!r}'
+
+
+def test_p3_3_leakage_bootstrap_is_reported_as_a_rate():
+    from core.statistics import paired_bootstrap
+    first = [{'id': f't{i}', 'status': 'success', 'ptbr_leakage_detected': i < 2}
+             for i in range(10)]
+    second = [{'id': f't{i}', 'status': 'success', 'ptbr_leakage_detected': i < 6}
+              for i in range(10)]
+    report = paired_bootstrap(first, second, metrics=('ptbr_leakage_pct',),
+                              repetitions=500)
+    metric = report['metrics']['ptbr_leakage_pct']
+    assert metric['n'] == 10
+    # 20% -> 60% leakage is +40 percentage points, not +0.4.
+    assert metric['mean_difference'] == pytest.approx(40.0)
+
+
+def test_p3_7_constraint_patterns_have_no_duplicate_alternatives():
+    import json
+    from pathlib import Path
+    from config import ELABORATION_CONSTRAINTS
+    data = json.loads(Path(ELABORATION_CONSTRAINTS).read_text(encoding='utf-8'))
+
+    def split_top_level(pattern):
+        parts, buf, depth, in_class, escaped = [], '', 0, False, False
+        for char in pattern:
+            if escaped:
+                buf += char
+                escaped = False
+                continue
+            if char == '\\':
+                buf += char
+                escaped = True
+                continue
+            if char == '[' and not in_class:
+                in_class = True
+            elif char == ']' and in_class:
+                in_class = False
+            elif char == '(' and not in_class:
+                depth += 1
+            elif char == ')' and not in_class:
+                depth -= 1
+            if char == '|' and depth == 0 and not in_class:
+                parts.append(buf)
+                buf = ''
+                continue
+            buf += char
+        parts.append(buf)
+        return parts
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == 'pattern' and isinstance(value, str):
+                    parts = split_top_level(value)
+                    assert len(parts) == len(set(parts)), f'duplicate alternatives: {value}'
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(data)

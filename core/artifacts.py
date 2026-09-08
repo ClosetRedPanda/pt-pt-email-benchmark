@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 from datetime import datetime, timezone
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -114,7 +115,7 @@ def validate_rows(
             if field in row and row[field] is not None and not _number_is_valid(row[field]):
                 errors.append(f"row {index} ({row_id or '?' }): {field} must be finite and non-negative")
 
-    duplicates = sorted({row_id for row_id in ids if ids.count(row_id) > 1})
+    duplicates = sorted({row_id for row_id, n in Counter(ids).items() if n > 1})
     if duplicates:
         errors.append(f"duplicate ids: {duplicates}")
     if expected_ids is not None:

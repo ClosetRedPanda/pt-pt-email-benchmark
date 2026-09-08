@@ -44,8 +44,27 @@ The prior versions accumulated application-style machinery around the benchmark.
 
 ```bash
 python -m pip install -r requirements.txt
+# Required by the PT-PT grammar rules (spaCy model is not a pip dependency):
+python -m spacy download pt_core_news_sm
+# Required by the Hunspell spelling fallback:
+python -m pip install spylls
 python runner.py validate
 ```
+
+### External requirements
+
+| Requirement | Needed for | If missing |
+| --- | --- | --- |
+| `pt_core_news_sm` (spaCy) | PT-PT grammar rules (proclisis, `ter`/`haver`, gerund) | Those rules are skipped; dialect signals lose grammar evidence |
+| `spylls` | Hunspell dictionary loading | PT-PT compliance, PT-BR leakage and WF report as unavailable |
+| Java runtime (JRE 8+) | `language_tool_python` local server | LanguageTool grammar checks are skipped |
+| `docs/pt_PT.*`, `docs/pt_BR.*` | Hunspell dictionaries (bundled) | As above |
+
+Pin the spaCy model version alongside the package: dependency labels and
+morphological features can change between model releases, and the PT-PT
+grammar rules read those features directly, so an unpinned model can move
+compliance results without any code change. The installed version is recorded
+in each run manifest.
 
 For candidate evaluation:
 

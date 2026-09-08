@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
 import json
 import sys
 import time
@@ -133,7 +134,9 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
         result_id = str(result["id"])
         result_ids.append(result_id)
         by_id.setdefault(result_id, result)
-    duplicate_ids = sorted({rid for rid in result_ids if result_ids.count(rid) > 1})
+    # P3.2: Counter is linear; `list.count()` inside a comprehension rescans
+    # the list for every element.
+    duplicate_ids = sorted({rid for rid, n in Counter(result_ids).items() if n > 1})
     truth_ids = {str(r["id"]) for r in truth_rows}
     unexpected_ids = sorted(set(result_ids) - truth_ids)
     metrics = {

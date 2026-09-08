@@ -167,7 +167,7 @@
     "required_facts": [
       {
         "fact_id": "seats",
-        "pattern": "25\\s+utilizadores|25\\s+utilizadores"
+        "pattern": "25\\s+utilizadores"
       }
     ],
     "required_actions": [
@@ -401,7 +401,7 @@
     "required_actions": [
       {
         "action_id": "missing_documents_count",
-        "pattern": "dois documentos|dois[^\\n]{0,20}documentos|documentos em falta|documentos em falta"
+        "pattern": "dois documentos|dois[^\\n]{0,20}documentos|documentos em falta"
       },
       {
         "action_id": "request_email_reply",
