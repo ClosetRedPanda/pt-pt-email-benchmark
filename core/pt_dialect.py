@@ -353,6 +353,14 @@ def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
         person = token.morph.get("Person")
         if person and "3" not in person:
             continue
+        # Further restrict to finite indicative. Subjunctive / future-subjunctive
+        # forms (tenha, tiver, …) are ordinary PT-PT and were false positives.
+        mood = token.morph.get("Mood")
+        if mood and "Ind" not in mood:
+            continue
+        verb_form = token.morph.get("VerbForm")
+        if verb_form and "Fin" not in verb_form:
+            continue
         has_explicit_nsubj = any(
             c.dep_ in ("nsubj", "nsubj:pass") for c in token.children
         )
