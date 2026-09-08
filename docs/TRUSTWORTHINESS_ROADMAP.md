@@ -316,7 +316,13 @@ release, all by design):
 - the spelling sub-stage of writing quality accepts a word present in either
   bundled Portuguese dictionary (pt_PT or pt_BR); dialect judgement stays in
   the dialect layer so one incomplete dictionary cannot cause spelling false
-  positives.
+  positives;
+- task-echoed vocabulary is exempt from the lexical contrast: when a task's own
+  required-action/fact patterns supply a word as an accepted answer (e.g.
+  `estorno`), echoing it is the model following the benchmark, not a
+  model-initiated dialect leak, so the runner and rescorer pass the task's
+  pattern vocabulary as `echo_vocab` to the dialect evaluator. Standalone
+  evaluator calls without task context remain strict.
 
 ### 11. Writing quality
 
@@ -353,6 +359,10 @@ better merely because it avoids one class of detector finding.
 Grammar evidence depends on a responding local LanguageTool server: when none
 responded, `grammar_errors_per_email` is reported as unavailable (N/A), never as
 a measured zero, and the report states that grammar evidence was unavailable.
+
+The writing-quality evaluator version is surfaced per scorecard (`wq_evaluator_version`);
+when an artifact mixes rows from different evaluator versions the field reports
+`mixed` instead of silently attributing everything to the first row's version.
 
 ## Priority 4: Make Performance Comparable
 

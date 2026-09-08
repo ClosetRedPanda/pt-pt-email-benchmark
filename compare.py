@@ -10,8 +10,9 @@ from core.statistics import paired_bootstrap
 from core.pt_dialect import evaluate_pt_dialect
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
+from core.generation_evaluator import constraint_echo_vocabulary
 from core.artifacts import ArtifactValidationError, load_manifest, validate_rows
-from runner import read_jsonl, score_analysis
+from runner import load_constraints, read_jsonl, score_analysis
 from config import ANALYSIS_REFERENCE, ELABORATION_PROMPTS, BENCHMARK_VERSION
 
 
@@ -91,6 +92,25 @@ def _render_sections(sections: Dict[str, Dict[str, Any]]) -> List[str]:
     return lines
 
 
+_ECHO_CONSTRAINT_MAP = None
+
+
+def _echo_vocab_for_row(row: Dict[str, Any]) -> Optional[set]:
+    """Task-echo vocabulary for a result row, from the row's own task id.
+
+    Loads the bundled constraint map once; rows whose id is not a known task
+    (or when the map cannot load) yield no exemption and stay strict.
+    """
+    global _ECHO_CONSTRAINT_MAP
+    if _ECHO_CONSTRAINT_MAP is None:
+        try:
+            _ECHO_CONSTRAINT_MAP = load_constraints()
+        except Exception:
+            _ECHO_CONSTRAINT_MAP = {}
+    spec = _ECHO_CONSTRAINT_MAP.get(str(row.get("id", "")), {})
+    return constraint_echo_vocabulary(spec) if isinstance(spec, dict) else set()
+
+
 def _enrich_generation_records(rows: List[Dict[str, Any]], *, use_languagetool: bool = False) -> List[Dict[str, Any]]:
     """Backfill evaluator fields for result files created before resource fixes."""
     enriched = []
@@ -113,7 +133,11 @@ def _enrich_generation_records(rows: List[Dict[str, Any]], *, use_languagetool: 
                 or result.get("wf_score") is None
             )
         ):
-            dialect = evaluate_pt_dialect(str(result["content"]), use_languagetool=use_languagetool)
+            dialect = evaluate_pt_dialect(
+                str(result["content"]),
+                use_languagetool=use_languagetool,
+                echo_vocab=_echo_vocab_for_row(result),
+            )
             wf = compute_word_fidelity_from_dialect(str(result["content"]), dialect)
             result.update({
                 "pt_dialect_score": dialect.get("pt_dialect_score"),
@@ -172,7 +196,11 @@ def _full_rescore_generation_records(
         text = str(content)
         is_ptpt = str(result.get("target_lang", "")).strip().lower() == "pt-pt"
         if is_ptpt:
-            dialect = evaluate_pt_dialect(text, use_languagetool=use_languagetool)
+            dialect = evaluate_pt_dialect(
+                text,
+                use_languagetool=use_languagetool,
+                echo_vocab=_echo_vocab_for_row(result),
+            )
             wf = compute_word_fidelity_from_dialect(text, dialect)
             result.update({
                 "pt_dialect_score": dialect.get("pt_dialect_score"),

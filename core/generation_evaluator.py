@@ -6,7 +6,7 @@ Evaluates model-generated email responses across:
 """
 
 import re
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 # Template slots are inferred structurally without hardcoding word lists:
 # 1. Verbatim slots reproduced from the prompt ([...])
@@ -104,6 +104,36 @@ def _is_direct_negation(prefix: str) -> bool:
 def _is_negated_match(text: str, start: int) -> bool:
     """Return True only when the matched forbidden proposition is explicitly denied."""
     return _is_direct_negation(_clause_prefix(text, start))
+
+
+def constraint_echo_vocabulary(constraints: Optional[Dict[str, Any]]) -> Set[str]:
+    """Alphabetic vocabulary a task's own constraint patterns supply.
+
+    The lexical-contrast dialect scorer must not penalise a model for echoing
+    words the benchmark's own task definition used as its accepted answers.
+    If a required action literally reads ``reembolso|estorno``, then ``estorno``
+    is vocabulary the benchmark handed the model — flagging it as a PT-BR leak
+    on the model's side would make the task un-winnable (the model is rewarded
+    for matching the pattern and punished for the dialect colour of its words).
+    Callers of the dialect evaluator that know the task (runner, rescorer)
+    extract this set structurally from every pattern field and pass it as
+    ``echo_vocab``; standalone evaluator calls without task context stay strict.
+    """
+    echo: Set[str] = set()
+    if not isinstance(constraints, dict):
+        return echo
+    for group in ("required_facts", "required_actions", "forbidden_changes", "forbidden_facts"):
+        for item in constraints.get(group, []) or []:
+            if not isinstance(item, dict):
+                continue
+            pattern = item.get("pattern")
+            if not isinstance(pattern, str):
+                continue
+            for match in re.finditer(r"[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’\-][A-Za-zÀ-ÖØ-öø-ÿ]+)*", pattern):
+                word = match.group(0).strip("-'’").lower()
+                if len(word) >= 3:
+                    echo.add(word)
+    return echo
 
 
 def _is_positive_match_negated(text: str, start: int) -> bool:

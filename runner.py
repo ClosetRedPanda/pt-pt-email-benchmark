@@ -19,7 +19,11 @@ from config import (
 )
 from core.api_client import OpenRouterClient
 from core.artifacts import build_manifest, sha256_bytes, sha256_file, write_manifest
-from core.generation_evaluator import evaluate_generation_output, load_constraint_map
+from core.generation_evaluator import (
+    constraint_echo_vocabulary,
+    evaluate_generation_output,
+    load_constraint_map,
+)
 from core.pt_dialect import evaluate_pt_dialect
 from core.scorecard import build_elaboration_scorecard
 from core.schemas import validate_email_analysis
@@ -274,9 +278,18 @@ async def _run_generation(model: str, prompts: Dict[str, Any], constraints: Dict
             try:
                 res = await client.elaborate_email_async(model, SYSTEM_PROMPT_ELABORATION, item["prompt"], max_tokens=DEFAULT_MAX_TOKENS)
                 text = str(res.get("content") or "")
-                ev = evaluate_generation_output(text, constraints.get(pid, {}), source_text=item["prompt"])
+                spec = constraints.get(pid, {})
+                ev = evaluate_generation_output(text, spec, source_text=item["prompt"])
                 target_lang = item.get("target_lang", "pt-pt")
-                dialect = evaluate_pt_dialect(text, use_languagetool=True) if target_lang == "pt-pt" else {}
+                # Vocabulary the task's own patterns supply is exempt from the
+                # lexical-contrast leak check: echoing the benchmark's accepted
+                # answer words must not count as a model dialect error.
+                echo_vocab = constraint_echo_vocabulary(spec)
+                dialect = (
+                    evaluate_pt_dialect(text, use_languagetool=True, echo_vocab=echo_vocab)
+                    if target_lang == "pt-pt"
+                    else {}
+                )
                 wf = compute_word_fidelity_from_dialect(text, dialect) if target_lang == "pt-pt" else {"wf_score": None}
                 wq = evaluate_writing_quality(text, language="pt-PT" if target_lang == "pt-pt" else "en-US", use_languagetool=True)
                 results.append({

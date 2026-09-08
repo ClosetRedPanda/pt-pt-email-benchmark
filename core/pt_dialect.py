@@ -330,12 +330,24 @@ _URI_SCHEME_TOKENS = frozenset("""
 """.split())
 
 
-def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
+def check_lexical_contrasts(
+    text: str,
+    echo_vocab: Optional[set] = None,
+) -> List[Dict[str, Any]]:
     """Find lexical items recognized by pt_BR but not pt_PT using bundled dictionaries.
 
     This is deliberately resource-driven: the benchmark does not maintain a second
     hand-authored Portuguese word list. A token is reported only when the existing
     Brazilian dictionary accepts it and the existing European dictionary does not.
+
+    ``echo_vocab`` (optional, lowercase alphabetic tokens) exempts task-echoed
+    vocabulary from the lexical contrast: when the benchmark's own task
+    constraints use a word as an accepted answer (e.g. ``estorno`` in a required
+    action pattern), the model is *expected* to write it, so flagging it as a
+    PT-BR leak would make the task un-winnable. The exemption is structural —
+    the caller derives the set from the task's own pattern fields — and applies
+    only when the caller supplies it: standalone use without task context keeps
+    the strict dictionary contrast. Grammar rules (spaCy) are unaffected.
     """
     ptpt = get_ptpt_dictionary()
     ptbr = get_ptbr_dictionary()
@@ -351,6 +363,11 @@ def check_lexical_contrasts(text: str) -> List[Dict[str, Any]]:
             continue
         if normalized in _URI_SCHEME_TOKENS:
             # Protocol labels are dialect-neutral vocabulary (see _URI_SCHEME_TOKENS).
+            continue
+        if echo_vocab and normalized in echo_vocab:
+            # Task-echoed vocabulary: the benchmark's own task patterns supplied
+            # this word as an accepted answer, so its dialect colour is not a
+            # model-initiated leak (see docstring).
             continue
         seen.add(normalized)
         if ptbr.lookup(normalized) and not ptpt.lookup(normalized):
@@ -594,7 +611,11 @@ def is_predominantly_english(text: str) -> bool:
 # Complete Multi-dimensional PT Dialect Evaluation
 # --------------------------------------------------------------------------- #
 
-def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, Any]:
+def evaluate_pt_dialect(
+    text: str,
+    use_languagetool: bool = True,
+    echo_vocab: Optional[set] = None,
+) -> Dict[str, Any]:
     """
     Evaluates Portuguese text for PT-PT fidelity and detects PT-BR dialect leaks.
     Returns:
@@ -693,7 +714,7 @@ def evaluate_pt_dialect(text: str, use_languagetool: bool = True) -> Dict[str, A
         all_violations.extend([i for i in api_issues if i.get("severity") != "warning"])
 
     # 3. Rule & Lexicon inspection
-    rule_issues = check_lexicon_and_rules(text) + check_lexical_contrasts(text)
+    rule_issues = check_lexicon_and_rules(text) + check_lexical_contrasts(text, echo_vocab=echo_vocab)
     for ri in rule_issues:
         # Deduplicate overlapping matches
         if not any(ri["context"].lower() in ai.get("context", "").lower() for ai in all_violations):

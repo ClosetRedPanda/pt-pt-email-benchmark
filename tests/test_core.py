@@ -333,6 +333,78 @@ def test_spelling_still_flags_true_misspellings():
     assert result['spelling_error_count'] >= 1, result['wq_violations']
 
 
+def test_task_echo_vocabulary_exempts_constraint_words_from_leakage():
+    # REL-01/REL-05: when a task's own required-action pattern supplies a word
+    # as an accepted answer (elab_pt_08: "reembolso|estorno"), the model is
+    # expected to echo it, so it must not be flagged as a model-initiated PT-BR
+    # leak. Without task context the strict dictionary contrast still applies.
+    from core.generation_evaluator import constraint_echo_vocabulary
+    spec = {'required_actions': [{'action_id': 'refund', 'pattern': 'reembolso|estorno'}]}
+    echo = constraint_echo_vocabulary(spec)
+    assert 'estorno' in echo and 'reembolso' in echo
+    text = ('Boa tarde,\n\nVerificámos a cobrança duplicada e procedemos ao '
+            'estorno do valor.\n\nCumprimentos')
+    strict = evaluate_pt_dialect(text, use_languagetool=False)
+    assert strict['ptbr_leakage_detected'] is True
+    exempted = evaluate_pt_dialect(text, use_languagetool=False, echo_vocab=echo)
+    assert exempted['ptbr_leakage_detected'] is False
+
+
+def test_task_echo_exemption_is_structural_across_pattern_groups():
+    from core.generation_evaluator import constraint_echo_vocabulary
+    spec = {
+        'required_facts': [{'fact_id': 'n', 'pattern': 'Marta Silva'}],
+        'required_actions': [{'action_id': 'a', 'pattern': 'consultar a política na intranet|portal'}],
+        'forbidden_changes': [{'change_id': 'w', 'pattern': 'valor de 240 euros'}],
+    }
+    echo = constraint_echo_vocabulary(spec)
+    for word in ('silva', 'consultar', 'política', 'intranet', 'portal', 'valor', 'euros'):
+        assert word in echo, word
+    assert constraint_echo_vocabulary(None) == set()
+
+
+def test_scorecard_reports_mixed_wq_evaluator_versions():
+    # REL-11: rows from different evaluator versions must surface as "mixed",
+    # not silently attributed to the first row's version.
+    rows = [
+        {'status': 'success', 'writing_quality': {'wq_evaluator_version': 'v1'}},
+        {'status': 'success', 'writing_quality': {'wq_evaluator_version': 'v2'}},
+    ]
+    s = build_elaboration_scorecard(rows)
+    assert s['wq_evaluator_version'] == 'mixed'
+    same = build_elaboration_scorecard([
+        {'status': 'success', 'writing_quality': {'wq_evaluator_version': 'v1'}},
+        {'status': 'success', 'writing_quality': {'wq_evaluator_version': 'v1'}},
+    ])
+    assert same['wq_evaluator_version'] == 'v1'
+
+
+def test_semantic_preservation_accepts_standard_pt_amount_format():
+    # REL-02: elab_pt_02's amount fact must accept the standard PT-PT format
+    # "1.240,00 €", not only the canonical "1,240 €" forms.
+    from config import ELABORATION_CONSTRAINTS
+    spec = json.loads(ELABORATION_CONSTRAINTS.read_text(encoding='utf-8'))['elab_pt_02']
+    text = ('Boa tarde, Sra. Marta Silva,\n\nSegue hoje a fatura corrigida '
+            'FT-4832 no valor de 1.240,00 €; pode contactar-nos para qualquer '
+            'dúvida.\n\nCumprimentos')
+    out = evaluate_generation_output(text, spec, source_text='')
+    assert out['semantic_preservation_score'] == 100.0
+    assert out['instruction_adherence_score'] == 100.0
+
+
+def test_word_fidelity_standalone_honors_echo_vocab():
+    # WF must not keep penalising task-echoed vocabulary once compliance no
+    # longer does (internal consistency across metrics).
+    from core.wf_fidelity import compute_word_fidelity
+    from core.generation_evaluator import constraint_echo_vocabulary
+    spec = {'required_actions': [{'action_id': 'refund', 'pattern': 'reembolso|estorno'}]}
+    text = 'Boa tarde,\n\nProcedemos ao estorno do valor.\n\nCumprimentos'
+    strict = compute_word_fidelity(text)
+    exempt = compute_word_fidelity(text, echo_vocab=constraint_echo_vocabulary(spec))
+    assert strict['wf_score'] < exempt['wf_score']
+    assert exempt['wf_score'] == 100.0
+
+
 def test_scorecard_grammar_unavailable_without_languagetool():
     # REL-07: without a LanguageTool backend, grammar counts are structural
     # zeros and must not be reported as a measured "0 errors per email".

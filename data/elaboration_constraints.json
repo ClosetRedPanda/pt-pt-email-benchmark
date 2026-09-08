@@ -41,7 +41,7 @@
       },
       {
         "fact_id": "amount",
-        "pattern": "1\\s*240\\s*€|1,240\\s*€|1240\\s*€"
+        "pattern": "1\\s*240\\s*€|1,240\\s*€|1240\\s*€|1[.,]240[.,]00(?:\\s*€)?|1\\s*240[.,]00(?:\\s*€)?|1240[.,]00(?:\\s*€)?"
       }
     ],
     "required_actions": [
@@ -195,7 +195,7 @@
       },
       {
         "action_id": "refund_one_charge",
-        "pattern": "reembolso|estorno"
+        "pattern": "reembolso|estorno|devolu[çc][aã]o"
       },
       {
         "action_id": "timing",

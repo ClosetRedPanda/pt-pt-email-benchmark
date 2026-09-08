@@ -114,11 +114,18 @@ def compute_word_fidelity_from_dialect(
 
 def compute_word_fidelity(
     text: str,
-    use_languagetool: bool = True
+    use_languagetool: bool = True,
+    echo_vocab: Optional[set] = None,
 ) -> Dict[str, Any]:
     """Compute WF through the single canonical dialect-derived implementation.
 
     EUPTVID is intentionally never used as the numerical base for WF.
+
+    ``echo_vocab`` is forwarded to the dialect evaluator so task-echoed
+    vocabulary (words the benchmark's own task patterns supplied as accepted
+    answers) is exempted consistently here too — otherwise WF would keep
+    penalising e.g. ``estorno`` inside an elab_pt_08 reply while the compliance
+    metric no longer does.
     """
     if not text or not text.strip():
         return {
@@ -145,6 +152,10 @@ def compute_word_fidelity(
             }]
         }
 
-    dialect_res = evaluate_pt_dialect(text, use_languagetool=use_languagetool)
+    dialect_res = evaluate_pt_dialect(
+        text,
+        use_languagetool=use_languagetool,
+        echo_vocab=echo_vocab,
+    )
     return compute_word_fidelity_from_dialect(text, dialect_res)
 
