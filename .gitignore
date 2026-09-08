@@ -9,3 +9,6 @@ results/*
 # Managed model resources (fetched by `python runner.py setup`)
 models/*.ftz
 models/*.bin
+
+# ...but keep the provenance README for the models directory tracked.
+!models/README.md

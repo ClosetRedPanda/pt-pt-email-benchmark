@@ -210,13 +210,24 @@ def get_ptbr_dictionary():
 _SPACY_NLP = None
 
 def get_spacy_nlp():
-    """Lazy-load the spaCy Portuguese linguistic pipeline (singleton)."""
+    """Lazy-load the spaCy Portuguese linguistic pipeline (singleton).
+
+    Mirrors the other optional-resource loaders: when the model is not
+    installed the loader records a permanent miss and returns ``None`` so
+    callers can degrade gracefully instead of crashing. Grammar-dependent
+    checks read ``None`` and skip their evidence (see README external
+    requirements).
+    """
     global _SPACY_NLP
     if _SPACY_NLP is None:
-        import spacy
-        # Only tagger, morphologizer, and parser are needed; disable NER for speed
-        _SPACY_NLP = spacy.load("pt_core_news_sm", disable=["ner"])
-    return _SPACY_NLP
+        _SPACY_NLP = False
+        try:
+            import spacy
+            # Only tagger, morphologizer, and parser are needed; disable NER for speed
+            _SPACY_NLP = spacy.load("pt_core_news_sm", disable=["ner"])
+        except Exception as exc:  # model missing or not installable -> unavailable
+            print(f"[warn] Failed to load spaCy pt_core_news_sm: {exc}", file=sys.stderr)
+    return _SPACY_NLP if _SPACY_NLP is not False else None
 
 
 # --------------------------------------------------------------------------- #
@@ -271,12 +282,15 @@ def _mask_nonlexical_spans(text: str) -> str:
     word-level exception list. Non-lexical spans are identified by syntax
     (spaCy URL/email token attributes and generic URI-scheme syntax).
     """
-    doc = get_spacy_nlp()(text)
-    spans = [
-        (token.idx, token.idx + len(token.text))
-        for token in doc
-        if token.like_url or token.like_email
-    ]
+    spans: List[Tuple[int, int]] = []
+    nlp = get_spacy_nlp()
+    if nlp is not None:  # spaCy absent -> fall back to regex-only URI masking
+        doc = nlp(text)
+        spans = [
+            (token.idx, token.idx + len(token.text))
+            for token in doc
+            if token.like_url or token.like_email
+        ]
     spans.extend((match.start(), match.end()) for match in _URI_SCHEME_RE.finditer(text))
 
     if not spans:
@@ -396,6 +410,8 @@ def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
         return []
 
     nlp = get_spacy_nlp()
+    if nlp is None:  # spaCy model unavailable -> no grammar evidence (see README)
+        return []
     doc = nlp(text)
     issues = []
 

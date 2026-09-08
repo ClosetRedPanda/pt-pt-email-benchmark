@@ -17,6 +17,20 @@ The benchmark measures:
 
 The benchmark is designed for researchers and developers evaluating **Portuguese LLMs, multilingual language models, email-generation models, and European Portuguese NLP systems**.
 
+## Project status
+
+**Actively developed.** This is currently a small, single-maintainer reference
+harness, not a large independently validated corpus: the fixed reference and
+generation sets are ~20 tasks each. That is enough to exercise the deterministic
+pipeline and to debug models, but **not yet enough to support tight statistical
+ranking between strong models**. Before citing any number it produces, read
+`docs/VALIDATION.md` and `docs/BENCHMARK_CARD.md` for what is and is not claimed.
+
+The most valuable next steps are: (1) growing and independently validating the
+reference/task sets, (2) publishing reproducible per-model results, and
+(3) broadening calibration/validation of the writing-quality score. See
+`CONTRIBUTING.md`.
+
 ## What it measures (In detail)
 
 ### Structured understanding
