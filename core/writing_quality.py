@@ -107,16 +107,48 @@ _CALIBRATION_LEARNING_RATE = 0.0
 _CALIBRATION_SCORE_BASE = 0.0
 _CALIBRATION_SCORE_PER_LEVEL = 0.0
 
+class WQCalibrationUnavailable(RuntimeError):
+    """Raised when the frozen WQ calibration artifact cannot be loaded.
+
+    FIX (P2.5): the loader previously let a bare FileNotFoundError escape, so a
+    missing `wq_length_neutral_calibration.json` aborted the entire WQ pipeline
+    with an opaque traceback.
+
+    The calibration model is deliberately frozen and is the only thing that maps
+    defect burden onto the published quality band, so it cannot be substituted
+    with an uncalibrated stand-in: DESIGN.md requires "honest None/unavailable
+    states instead of silently converting missing evidence to a score", and the
+    roadmap's WQ section requires that a model must not look better merely
+    because a detector class went missing. Callers therefore degrade to the
+    existing `empty_wq_result(excluded=...)` contract, exactly as they already
+    do when Hunspell dictionaries are absent.
+    """
+
+
 def _load_calibration_model() -> None:
     global _CALIBRATION_MODEL, _CALIBRATION_TREES, _CALIBRATION_INIT
     global _CALIBRATION_LEARNING_RATE, _CALIBRATION_SCORE_BASE
     global _CALIBRATION_SCORE_PER_LEVEL
     if _CALIBRATION_MODEL is not None:
         return
-    with _CALIBRATION_MODEL_PATH.open("r", encoding="utf-8") as _fh:
-        model = json.load(_fh)
+    try:
+        with _CALIBRATION_MODEL_PATH.open("r", encoding="utf-8") as _fh:
+            model = json.load(_fh)
+    except FileNotFoundError as exc:
+        raise WQCalibrationUnavailable(
+            f"frozen WQ calibration artifact not found at {_CALIBRATION_MODEL_PATH}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise WQCalibrationUnavailable(
+            f"frozen WQ calibration artifact at {_CALIBRATION_MODEL_PATH} is not valid JSON: {exc}"
+        ) from exc
     if tuple(model.get("features", ())) != _CALIBRATION_FEATURES:
-        raise RuntimeError("Frozen WQ calibration feature schema mismatch")
+        raise WQCalibrationUnavailable("Frozen WQ calibration feature schema mismatch")
+    for required_key in ("trees", "init_value", "learning_rate", "score_mapping"):
+        if required_key not in model:
+            raise WQCalibrationUnavailable(
+                f"frozen WQ calibration artifact is missing required key {required_key!r}"
+            )
     _CALIBRATION_MODEL = model
     _CALIBRATION_TREES = model["trees"]
     _CALIBRATION_INIT = float(model["init_value"])
@@ -1137,7 +1169,17 @@ def evaluate_writing_quality(
     # features remain transparent diagnostics; the fitted combination exists
     # only because the Task 7 reference set demonstrated that clean adjacent
     # quality bands cannot be recovered from defect counts alone.
-    score = _calibrated_quality_score(profile, defect_only_score)
+    try:
+        score = _calibrated_quality_score(profile, defect_only_score)
+    except WQCalibrationUnavailable as exc:
+        # P2.5: no calibration artifact means no publishable WQ score. Report
+        # the metric as explicitly excluded rather than crashing the run or
+        # inventing an uncalibrated number.
+        return empty_wq_result(
+            excluded=True,
+            excluded_reason=f"WQ calibration unavailable: {exc}",
+            fixture_headers_stripped=headers_stripped,
+        )
     polish_score = round(
         (0.60 * profile["diversity_quality"] + 0.40 * profile["rhythm_quality"]) * 100.0,
         1,

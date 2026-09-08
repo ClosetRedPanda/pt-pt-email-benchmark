@@ -257,7 +257,11 @@ def test_analysis_reports_missing_failed_duplicate_and_unexpected_results():
         {'id': 'extra', 'status': 'success', 'parsed': {}, 'is_valid_schema': False},
     ]
     scored = score_analysis(truth, results)
-    assert scored['missing_results'] == 2
+    # P1.1: 'a' is present but errored -> failed, not missing. Only 'b' is
+    # genuinely absent. Previously 'a' incremented both counters, so 1 error
+    # plus 1 absent row reported as 2 missing + 1 failed = 3 problems for 2
+    # affected tasks.
+    assert scored['missing_results'] == 1
     assert scored['failed_results'] == 1
     assert scored['duplicate_result_ids'] == ['a']
     assert scored['unexpected_result_ids'] == ['extra']
@@ -674,3 +678,72 @@ def test_p0_1_malformed_timestamps_do_not_crash():
     ]
     s = build_elaboration_scorecard(records)
     assert s['observed_wall_ms'] == pytest.approx(1000)
+
+
+# ---------------------------------------------------------------------------
+# P1 / P2 regression tests
+# ---------------------------------------------------------------------------
+
+def test_p2_4_non_dict_parsed_does_not_crash_scoring():
+    """A JSON array/scalar parses fine but is not a dict; scoring must survive."""
+    truth = [{'id': 'a', 'ground_truth': {'category': 'support'}},
+             {'id': 'b', 'ground_truth': {'category': 'support'}}]
+    for bad in ([{'category': 'support'}], 'a string', 42, True):
+        rows = [
+            {'id': 'a', 'status': 'success', 'parsed': bad,
+             'is_valid_schema': False, 'parse_repaired': False},
+            {'id': 'b', 'status': 'success', 'parsed': {'category': 'support'},
+             'is_valid_schema': True, 'parse_repaired': False},
+        ]
+        scored = score_analysis(truth, rows)
+        # Row is scored as a miss, NOT dropped: the denominator stays at 2 so a
+        # malformed payload cannot improve accuracy by shrinking it.
+        assert scored['denominators']['category_acc_pct'] == 2
+        assert scored['category_acc_pct'] == 50.0
+
+
+def test_p1_1_present_but_failed_row_is_not_also_counted_missing():
+    """failed + missing + scored must reconcile against requested samples."""
+    truth = [{'id': f't{i}', 'ground_truth': {'category': 'support'}}
+             for i in range(20)]
+    rows = [{'id': f't{i}', 'status': 'error', 'error': 'boom'} for i in range(3)]
+    rows += [
+        {'id': f't{i}', 'status': 'success', 'parsed': {'category': 'support'},
+         'is_valid_schema': True, 'parse_repaired': False}
+        for i in range(5, 20)
+    ]
+    scored = score_analysis(truth, rows)
+    assert scored['failed_results'] == 3
+    assert scored['missing_results'] == 2
+    scored_count = scored['denominators']['category_acc_pct']
+    assert scored_count == 15
+    assert scored['failed_results'] + scored['missing_results'] + scored_count == \
+        scored['requested_samples']
+
+
+def test_p2_5_missing_wq_calibration_excludes_instead_of_crashing():
+    """A missing frozen calibration artifact must not abort the WQ pipeline."""
+    import importlib
+    import shutil
+    from pathlib import Path
+    import core.writing_quality as wq_mod
+
+    path = wq_mod._CALIBRATION_MODEL_PATH
+    if not Path(path).is_file():
+        pytest.skip('calibration artifact not present in this checkout')
+    backup = Path(str(path) + '.p25bak')
+    shutil.move(str(path), str(backup))
+    try:
+        importlib.reload(wq_mod)
+        result = wq_mod.evaluate_writing_quality(
+            'Bom dia, agradeco a sua mensagem. Com os melhores cumprimentos.',
+            language='pt-PT', use_languagetool=False,
+        )
+        # No invented score, and the exclusion is explicit and machine-readable.
+        assert result['writing_quality_score'] is None
+        assert result['wq_scored'] is False
+        assert result['wq_excluded'] is True
+        assert 'calibration' in result['wq_excluded_reason'].lower()
+    finally:
+        shutil.move(str(backup), str(path))
+        importlib.reload(wq_mod)

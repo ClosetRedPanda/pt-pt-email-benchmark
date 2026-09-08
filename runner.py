@@ -164,10 +164,25 @@ def score_analysis(truth_rows: List[Dict[str, Any]], result_rows: List[Dict[str,
             missing += 1
             continue
         if got.get("status") == "error" or got.get("error"):
-            missing += 1
+            # FIX (P1.1): a row that is present but errored is a *failure*, not
+            # a missing result. Counting it as both made 5 provider errors look
+            # like 10 distinct problems and broke the roadmap's requirement
+            # that requested/attempted/successful/failed/missing reconcile
+            # against one another.
             metrics["failed_results"] += 1
             continue
-        parsed = got.get("parsed") or {}
+        # FIX (P2.4): `parsed` holds whatever `json.loads` produced, which is
+        # only a dict when the model emitted a JSON object. A well-formed JSON
+        # array or scalar parses successfully, fails schema validation, and
+        # then reaches this line as a list/str -- `.get()` raised
+        # AttributeError and killed the whole scoring run.
+        #
+        # Non-object payloads are treated as "no fields extracted" rather than
+        # dropped: the row still counts in every accuracy denominator and
+        # scores as a miss, so a malformed structure cannot improve a result
+        # by silently shrinking the denominator.
+        raw_parsed = got.get("parsed")
+        parsed = raw_parsed if isinstance(raw_parsed, dict) else {}
         # FIX (P0.2): `is_valid_schema` is set to True even when the raw model
         # output was malformed and only became parseable after
         # `repair_json_content()` patched it (stripping markdown fences,
