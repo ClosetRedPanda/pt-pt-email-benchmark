@@ -29,21 +29,79 @@ _EUPTVID_MODEL = None
 _EUPTVID_MODEL_PATH = BASE_DIR / "models" / "model_quantized.ftz"
 
 
+def _patch_fasttext_numpy2() -> None:
+    """Make fastText's predict() work under NumPy >= 2.
+
+    fastText 0.9.x calls ``np.array(probs, copy=False)``. NumPy 2 turned that
+    into a hard error ("Unable to avoid copy while creating an array as
+    requested") instead of a silent copy, so *every* prediction raises. The
+    upstream package is effectively unmaintained, so the call is adapted here:
+    ``copy=None`` is the NumPy 2 spelling of "copy only if required", which is
+    exactly what ``copy=False`` meant in NumPy 1.
+    """
+    import numpy as np
+
+    if getattr(np, "_ptpt_fasttext_patched", False):
+        return
+    if int(np.__version__.split(".", 1)[0]) < 2:
+        return
+
+    import fasttext.FastText as _ft
+
+    original_predict = _ft._FastText.predict
+
+    def predict(self, *args, **kwargs):
+        real_array = np.array
+
+        def tolerant_array(obj, *a, **k):
+            if k.get("copy") is False:
+                k["copy"] = None
+            return real_array(obj, *a, **k)
+
+        np.array = tolerant_array
+        try:
+            return original_predict(self, *args, **kwargs)
+        finally:
+            np.array = real_array
+
+    _ft._FastText.predict = predict
+    np._ptpt_fasttext_patched = True
+
+
 def get_euptvid_model():
-    """Singleton loader for fastText EUPTVID dialect classifier."""
+    """Singleton loader for the fastText EUPTVID dialect classifier.
+
+    The model file is a managed resource (see ``core/resources.py``): it is too
+    large to commit, is pinned to an exact upstream revision, and is verified by
+    SHA-256 before use. ``python runner.py setup`` fetches it.
+
+    A missing model still yields an unavailable signal rather than a fabricated
+    one, matching the Hunspell behaviour, but the warning now says how to fix it
+    instead of failing silently.
+    """
     global _EUPTVID_MODEL
     if _EUPTVID_MODEL is None:
-        if _EUPTVID_MODEL_PATH.exists():
+        from core.resources import EUPTVID, verify
+
+        problem = verify(EUPTVID)
+        if problem is not None:
+            print(
+                f"[warn] EUPTVID unavailable ({problem}). "
+                f"Run `python runner.py setup` to fetch it; "
+                f"euptvid_probability will be reported as unavailable.",
+                file=sys.stderr,
+            )
+            _EUPTVID_MODEL = False
+        else:
             try:
                 import fasttext
                 # Suppress fasttext warning banner
                 fasttext.FastText.eprint = lambda x: None
-                _EUPTVID_MODEL = fasttext.load_model(str(_EUPTVID_MODEL_PATH))
+                _patch_fasttext_numpy2()
+                _EUPTVID_MODEL = fasttext.load_model(str(EUPTVID.path))
             except Exception as e:
-                print(f"[warn] Failed to load EUPTVID model from {_EUPTVID_MODEL_PATH}: {e}", file=sys.stderr)
+                print(f"[warn] Failed to load EUPTVID model from {EUPTVID.path}: {e}", file=sys.stderr)
                 _EUPTVID_MODEL = False
-        else:
-            _EUPTVID_MODEL = False
     return _EUPTVID_MODEL if _EUPTVID_MODEL is not False else None
 
 

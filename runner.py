@@ -78,10 +78,13 @@ def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[st
             root / "runner.py",
         ]
         system_prompt = SYSTEM_PROMPT_ELABORATION
+    from core.resources import EUPTVID
     resource_paths = [
         root / "docs" / name for name in ("pt_PT.dic", "pt_PT.aff", "pt_BR.dic", "pt_BR.aff")
     ] + [
-        root / "models" / "model_quantized.ftz",
+        # Managed resource: hashed into the manifest so a result is bound to the
+        # exact classifier build that produced it.
+        EUPTVID.path,
         root / "data" / "wq_length_neutral_calibration.json",
     ]
     manifest = build_manifest(
@@ -313,6 +316,8 @@ def load_constraints() -> Dict[str, Any]:
 def main() -> None:
     p = argparse.ArgumentParser(description="Lean PT-PT/English email benchmark")
     sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("setup", help="download and verify managed model resources")
+    s.add_argument("--force", action="store_true", help="re-download even if already present")
     s = sub.add_parser("validate", help="run local benchmark integrity checks")
     s = sub.add_parser("analysis", help="run structured analysis against the fixed reference set")
     s.add_argument("--model", required=True)
@@ -326,6 +331,19 @@ def main() -> None:
     s.add_argument("--results", type=Path, required=True)
     args = p.parse_args()
 
+    if args.cmd == "setup":
+        from core.resources import MANAGED_RESOURCES, download_all, verify
+        results = download_all(force=args.force)
+        failed = {k: v for k, v in results.items() if v != "ok"}
+        for key, resource in MANAGED_RESOURCES.items():
+            state = "OK" if verify(resource) is None else "UNAVAILABLE"
+            print(f"  {state:12} {resource.relative_path}  ({resource.description})")
+        if failed:
+            for key, message in failed.items():
+                print(f"[error] {key}: {message}", file=sys.stderr)
+            raise SystemExit(1)
+        print("Setup complete.")
+        return
     if args.cmd == "validate":
         from validate import run_validation
         run_validation()

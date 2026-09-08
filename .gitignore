@@ -5,3 +5,7 @@ __pycache__/
 models/*
 results/*
 *.manifest.json
+
+# Managed model resources (fetched by `python runner.py setup`)
+models/*.ftz
+models/*.bin

@@ -908,3 +908,87 @@ def test_p3_7_constraint_patterns_have_no_duplicate_alternatives():
                 walk(item)
 
     walk(data)
+
+
+# ---------------------------------------------------------------------------
+# Managed external resources (EUPTVID)
+# ---------------------------------------------------------------------------
+
+def test_managed_resource_declares_pinned_revision_and_digest():
+    from core.resources import EUPTVID
+    # A branch name would let upstream change the model under a fixed
+    # benchmark version; the URL must pin an immutable commit.
+    assert "/resolve/main/" not in EUPTVID.url
+    assert len(EUPTVID.sha256) == 64
+    assert EUPTVID.relative_path == "models/model_quantized.ftz"
+
+
+def test_managed_resource_rejects_corrupted_file(tmp_path, monkeypatch):
+    """A file with the wrong digest must be reported, never used."""
+    from core import resources
+    bad = tmp_path / "model_quantized.ftz"
+    bad.write_bytes(b"not the real model")
+    monkeypatch.setattr(resources, "BASE_DIR", tmp_path.parent)
+    fake = resources.ManagedResource(
+        key="fake", relative_path=bad.name, url="https://example.invalid/x",
+        sha256="0" * 64, size_bytes=1, description="test", license_note="test",
+    )
+    monkeypatch.setattr(type(fake), "path", property(lambda self: bad))
+    problem = resources.verify(fake)
+    assert problem is not None and "checksum mismatch" in problem
+    assert not resources.is_available(fake)
+    with pytest.raises(resources.ResourceUnavailable):
+        resources.require(fake)
+
+
+def test_missing_euptvid_yields_unavailable_not_fabricated(monkeypatch):
+    """Absent model => unavailable signal, never an invented probability."""
+    import core.pt_dialect as ptd
+    from core import resources
+    monkeypatch.setattr(resources, "verify", lambda r: "missing: test")
+    monkeypatch.setattr(ptd, "_EUPTVID_MODEL", None)
+    try:
+        assert ptd.get_euptvid_model() is None
+        signal = ptd.evaluate_euptvid_signal("Bom dia, agradeco a sua mensagem.")
+        assert signal["available"] is False
+        assert signal["ptpt_prob"] is None
+        assert signal["label"] == "UNKNOWN"
+    finally:
+        ptd._EUPTVID_MODEL = None
+
+
+def test_euptvid_classifies_when_resource_present():
+    """When the managed model is installed the signal must actually work."""
+    import core.pt_dialect as ptd
+    from core.resources import EUPTVID, is_available
+    if not is_available(EUPTVID):
+        pytest.skip("EUPTVID resource not installed; run `python runner.py setup`")
+    ptd._EUPTVID_MODEL = None
+    ptpt = ptd.evaluate_euptvid_signal(
+        "Bom dia, agradeco a sua mensagem e confirmo a reuniao de amanha."
+    )
+    ptbr = ptd.evaluate_euptvid_signal(
+        "Oi, vou mandar o arquivo pra voce hoje de manha, ta bom?"
+    )
+    assert ptpt["available"] is True and ptbr["available"] is True
+    # The PT-PT text must score higher on PT-PT than the PT-BR text does.
+    assert ptpt["ptpt_prob"] > ptbr["ptpt_prob"]
+    assert ptpt["label"] == "PT-PT"
+    assert ptbr["label"] == "PT-BR"
+
+
+def test_fasttext_numpy2_shim_is_applied_when_needed():
+    """fastText 0.9.x + NumPy>=2 raises on every predict() without the shim."""
+    import numpy as np
+    from core.resources import EUPTVID, is_available
+    if not is_available(EUPTVID):
+        pytest.skip("EUPTVID resource not installed")
+    if int(np.__version__.split(".", 1)[0]) < 2:
+        pytest.skip("shim only needed on NumPy >= 2")
+    import core.pt_dialect as ptd
+    ptd._EUPTVID_MODEL = None
+    model = ptd.get_euptvid_model()
+    assert model is not None
+    # Would raise ValueError("Unable to avoid copy...") unpatched.
+    labels, probs = model.predict("Bom dia, tudo bem consigo?", k=-1)
+    assert len(labels) == len(probs) > 0

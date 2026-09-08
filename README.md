@@ -48,8 +48,15 @@ python -m pip install -r requirements.txt
 python -m spacy download pt_core_news_sm
 # Required by the Hunspell spelling fallback:
 python -m pip install spylls
+# Fetch and verify managed model resources (EUPTVID classifier, ~71 MB):
+python runner.py setup
 python runner.py validate
 ```
+
+`python runner.py setup` downloads the model files that are too large to commit,
+pinned to an exact upstream revision and verified by SHA-256. See
+`models/README.md`. Re-run it any time; it is a no-op when everything is already
+present and valid.
 
 ### External requirements
 

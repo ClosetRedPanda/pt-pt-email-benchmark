@@ -20,7 +20,7 @@ This lean package deliberately makes fewer claims than the larger engineering ve
 ## What is *not* claimed
 The included WQ human reference contains 50 verified rows, but it does not establish multi-rater inter-rater reliability. The benchmark therefore does **not** call the formal human WQ gate passed.
 
-EUPTVID is an optional external model asset in this trimmed distribution. Hunspell dictionaries are loaded from `docs/pt_PT.*` and `docs/pt_BR.*`; when unavailable, those signals remain unavailable rather than being replaced with fabricated scores.
+EUPTVID is a managed external model asset: it is not committed to the repository, but `python runner.py setup` fetches it from a pinned upstream revision and verifies its SHA-256 before use, and its digest is recorded in every run manifest. A model that is absent or fails verification yields an unavailable signal rather than a fabricated one. Hunspell dictionaries are loaded from `docs/pt_PT.*` and `docs/pt_BR.*`; when unavailable, those signals remain unavailable rather than being replaced with fabricated scores.
 
 Existing `v2` result files are legacy artifacts. They can be inspected only with
 `--allow-legacy`; `--rescore` is explicitly labeled exploratory and does not yet
