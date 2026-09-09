@@ -51,7 +51,7 @@
       },
       {
         "action_id": "finance_contact",
-        "pattern": "contacto|contactar|\\+351|@"
+        "pattern": "(?:[\\w.+-]+@[\\w-]+\\.[\\w.-]+|\\+351[\\s\\d-]{6,}|\\b\\d{3}[\\s-]?\\d{3}[\\s-]?\\d{3}\\b|(?:contactar|contacta[rl]?|falar|ligar|escrever|dispon[íi]ve)[^\\n]{0,60}(?:-nos|-lo|-la|connosco|para o|para a|departamento|equipa|email|telefone|n[ºu]mero))"
       }
     ]
   },
@@ -199,7 +199,7 @@
       },
       {
         "action_id": "timing",
-        "pattern": "dias|dia[s]?|prazo|conta|\\b(?:hoje|amanhã|amanha)\\b"
+        "pattern": "\\b(?:hoje|amanh[ãa])\\b|(?:até|dentro de|em|no prazo de|prazo de)\\s+\\d{1,3}\\s*(?:dias?|semanas?|úteis|horas?|mês|meses)|\\b\\d{1,2}[/.]\\d{1,2}(?:[/.]\\d{2,4})?\\b|\\b(?:0?[1-9]|[12]\\d|3[01])\\s+de\\s+[A-Za-zÀ-ÿ]{3,}\\b|\\b(?:segunda|ter[çc]a|quarta|quinta|sexta)[-\\s ]?(?:feira)?\\b"
       }
     ]
   },
@@ -273,7 +273,7 @@
     "required_actions": [
       {
         "action_id": "thank_contact",
-        "pattern": "obrigad|agrade[çc]"
+        "pattern": "(?:obrigad|agrade[çc])[^\\n]{0,60}\\b(?:candidatura|processo|interp(?:[eé]|ess)|tempo que)"
       },
       {
         "action_id": "still_under_review",
@@ -297,7 +297,7 @@
       },
       {
         "action_id": "support_contact",
-        "pattern": "suporte|contacte|contactar|apoio"
+        "pattern": "(?:suporte|contactar|contacte|assist[êe]ncia)[^\\n]{0,80}(?:@|\\+351|www\\.|https?://)|(?:@|\\+351|www\\.|https?://)[^\\n]{0,80}(?:suporte|contactar|assist[êe]ncia)"
       }
     ]
   },
@@ -319,7 +319,7 @@
       },
       {
         "action_id": "professional_tone",
-        "pattern": "cumprimentos|com os melhores cumprimentos|bom dia|boa tarde"
+        "pattern": "(?:às\\s*\\d{1,2}\\s*(?:h|horas)|\\b\\d{1,2}[:.]\\d{2}\\b|\\b\\d{1,2}h\\d{2}\\b)[\\s\\S]{0,200}(?:cumprimentos|atentamente)"
       }
     ]
   },
@@ -428,16 +428,12 @@
   "elab_pt_20": {
     "required_actions": [
       {
-        "action_id": "thank_contact",
-        "pattern": "obrigad|agrade[çc]"
-      },
-      {
         "action_id": "case_number",
         "pattern": "processo|caso|refer[êe]ncia|número[^\\n]{0,20}(processo|caso)|numero[^\\n]{0,20}(processo|caso)"
       },
       {
         "action_id": "professional_close",
-        "pattern": "cumprimentos|com os melhores cumprimentos|atentamente"
+        "pattern": "(?:processo|refer[êe]ncia)[^\\n]{0,30}\\d|[Nn][úu]m(?:ero)?\\s*(?:de\\s+)?(?:processo|refer[êe]ncia)[^\\n]{0,30}\\d"
       }
     ]
   }

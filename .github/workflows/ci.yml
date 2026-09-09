@@ -45,6 +45,8 @@ jobs:
           python tools/run_smoke_baseline.py --output baselines/smoke-baseline.json
           git diff --exit-code -- baselines/smoke-baseline.json
 
+      - name: Assert scoring floor is zero (no free credit for boilerplate)
+        run: python tools/check_scoring_floor.py
       - name: Report detector agreement with the gold labels
         run: python tools/gold_agreement.py --check-baseline baselines/gold-agreement.json
 

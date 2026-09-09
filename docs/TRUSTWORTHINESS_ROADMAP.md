@@ -46,6 +46,17 @@ Known limitations:
   losses, and ties without treating independent task samples as independent runs.
 - Mutation tests cover negation, changed facts, forbidden changes, placeholders,
   and Markdown-link false positives.
+- The scoring scale is anchored at a true zero and CI-enforced there:
+  `python tools/check_scoring_floor.py` scores the shared no-content control
+  against every task and fails if any task-specific criterion passes. The same
+  control text is the published smoke baseline, so the gate and the baseline
+  cannot drift apart.
+- Permissive task criteria were closed (6 retargeted, 1 removed). Each retargeted
+  criterion has a positive ceiling probe in `tests/test_scoring_floor.py`, so a
+  criterion cannot be "fixed" by making it unsatisfiable.
+- `data/elaboration_constraints.json` is hashed into a run manifest's
+  `evaluator_versions` (not only `input_hashes`), because it defines the
+  criteria rather than the prompt a model sees.
 
 ### Still unsafe or incomplete
 
@@ -59,11 +70,25 @@ Known limitations:
 	interval reflects uncertainty across these tasks rather than population validity.
 - The WQ calibration is not demonstrated to have independent multi-rater reliability.
 - Instruction and semantic checks remain regex/pattern-based proxies. The
-  committed constant smoke baseline scores 13.33% mean adherence and reaches
-  50–66.7% on some tasks without task-specific content, directly demonstrating
-  a permissive-pattern floor that must be fixed before close model ranking.
+  permissive-pattern floor those proxies used to carry is closed: the constant
+  smoke baseline now scores **0.0%** mean adherence and **0.0%** semantic
+  preservation across all 20 tasks (previously 13.33% mean, up to 66.7% on
+  individual tasks, from boilerplate alone). The floor is enforced, not just
+  documented, by `python tools/check_scoring_floor.py` in CI and on release.
+  The remaining limitation is construct validity, not scale: a pattern check
+  measures surface string presence, not language understanding.
+- Task criteria are pattern definitions, not reviewed gold annotations. Closing
+  the floor retargeted 6 criteria and removed 1 non-discriminating one; that is
+  a scoring-contract change made by a single author and it has not been
+  independently reviewed. Treat it as an interim improvement, and re-audit the
+  full criteria set against human judgement before ranking close models.
 - The result validator and manifest are versioned, but the row contract is not yet
 	a complete formal schema for every optional provider field.
+- The LanguageTool **engine** and its rule sets are downloaded by
+  `language_tool_python`, not pinned as managed resources, so grammar-derived
+  signals can still move without any repository change. The manifest now records
+  the locally observed engine identity under `parameters.languagetool`, which
+  makes such a move visible after the fact rather than preventing it.
 
 ## Priority 1: Freeze Reproducibility
 

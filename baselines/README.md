@@ -6,12 +6,24 @@ constant, deterministic, non-LLM pipeline floor and is explicitly
 and generation constraints can produce an auditable artifact without an API.
 It is **not** a competitive baseline and must not be shown in model rankings.
 
-The generic email still receives a non-zero mean instruction-adherence score
-(`13.33%`) and reaches `50–66.7%` on some items despite containing no
-sample-specific answer. This is diagnostic evidence of a permissive pattern
-floor/ceiling risk, not evidence that the baseline followed those instructions.
-Until the affected task checks are redesigned and item-analysed, small score
-differences must not be interpreted as reliable model separation.
+The generic email now scores **`0.0%` mean instruction adherence and `0.0%`
+semantic preservation**, with no task scoring above zero. That is the required
+property: a criterion that this text satisfies measures "is this a plausible
+email", not "did the model follow the task", so it would award every candidate
+the same free credit and compress the band in which models actually differ.
+
+The floor previously reached `13.33%` mean and `50–66.7%` on individual items
+from boilerplate alone. Six task criteria were retargeted and one
+(`elab_pt_20.thank_contact`) was removed to close it. The property is now
+enforced rather than merely recorded:
+
+```bash
+python tools/check_scoring_floor.py   # exit 1 if any criterion passes on boilerplate
+```
+
+Small score differences still must not be read as reliable model separation —
+the task set is too small, and a pattern check is a proxy for adherence, not a
+measurement of it.
 
 Regenerate and confirm a byte-for-byte clean result:
 

@@ -46,6 +46,42 @@ writing the evaluator that is tested against it.
 - Before opening a PR, confirm the tests that do not need external resources
   pass, and note in the PR if you could not run the resource-dependent ones.
 
+## Scale validity (read this before editing a task criterion)
+
+Every scored criterion must be **discriminating**: a reply containing none of the
+task's required content must not satisfy it. `tools/check_scoring_floor.py`
+asserts this in CI, so a new permissive pattern fails the build rather than
+quietly inflating every model's score.
+
+When you change `data/elaboration_constraints.json`, a PR must contain all of:
+
+```bash
+# 1. the metric must still have a true zero
+python tools/check_scoring_floor.py
+
+# 2. and a reachable ceiling: add/update a positive probe in
+#    tests/test_scoring_floor.py so the criterion cannot be "fixed" by
+#    making it unsatisfiable
+
+# 3. republish the deterministic baseline
+python tools/run_smoke_baseline.py --output baselines/smoke-baseline.json
+
+# 4. re-record the artifact digest, or `runner.py validate` fails
+python - <<'PY'
+import hashlib, json, pathlib
+new = hashlib.sha256(pathlib.Path('data/elaboration_constraints.json').read_bytes()).hexdigest()
+p = pathlib.Path('data/PROVENANCE.json'); s = p.read_text(encoding='utf-8')
+old = json.loads(s)['artifacts']['data/elaboration_constraints.json']
+p.write_text(s.replace(old, new, 1), encoding='utf-8')
+PY
+
+# 5. keep the tracked-file inventory byte-sorted (CI diffs it against git ls-files)
+git add <new files> && git ls-files | LC_ALL=C sort > MANIFEST.txt
+```
+
+If the change alters what a score *means* rather than fixing a measurement bug,
+that is a `BENCHMARK_VERSION` decision — see `docs/RELEASING.md`.
+
 ## Code style
 
 - Python 3.11+.

@@ -37,6 +37,11 @@ CONSTANT_ANALYSIS = {
     "language_variant": "pt-pt",
     "summary": "Mensagem recebida para análise.",
 }
+# Shared no-content control. `tools/check_scoring_floor.py` imports this exact
+# string to assert that no task criterion can be satisfied by boilerplate, so
+# editing it changes the meaning of that gate as well as this baseline. Keeping
+# a single copy is deliberate: a control text tuned to make the gate pass would
+# be worth nothing.
 CONSTANT_EMAIL = """Assunto: Resposta ao seu pedido
 
 Exmo. Senhor,

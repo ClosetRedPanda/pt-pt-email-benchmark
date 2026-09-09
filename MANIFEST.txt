@@ -55,8 +55,10 @@ runner.py
 tests/test_core.py
 tests/test_gold_agreement.py
 tests/test_package_integrity.py
+tests/test_scoring_floor.py
 tools/apply_human_wq_review.py
 tools/gold_agreement.py
+tools/check_scoring_floor.py
 tools/prepare_wq_rater_overlap.py
 tools/rescore_artifact.py
 tools/review_wq_calibration.py

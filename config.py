@@ -40,4 +40,11 @@ SYSTEM_PROMPT_ELABORATION = """You are an executive email communication assistan
 
 # Conservative score presentation: dimensions remain separate; there is no
 # headline "overall quality" number.
-BENCHMARK_VERSION = "lean-1.0"
+#
+# lean-1.1: the generation criteria were retargeted to close a permissive-pattern
+# scoring floor (a content-free boilerplate reply used to earn 13.33% mean
+# adherence, and up to 66.7% on a single task). That changes what an adherence
+# score measures, so per docs/RELEASING.md the comparability identifier moves.
+# No published artifact declared lean-1.0, so nothing is orphaned by this bump;
+# from here, `tools/check_scoring_floor.py` keeps the floor pinned at zero.
+BENCHMARK_VERSION = "lean-1.1"

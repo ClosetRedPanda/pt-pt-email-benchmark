@@ -44,6 +44,12 @@ Schema validity, category accuracy, urgency accuracy, action-required accuracy, 
 ### Generation
 Instruction adherence and semantic preservation using deterministic constraints extracted from the fixed task specification.
 
+Both metrics are anchored at a true zero: the committed no-content control reply
+scores 0.0 on every task, and CI fails if any task criterion can be satisfied by
+boilerplate. A criterion that generic prose already passes would hand every model
+identical free credit and compress the range where models actually differ. See
+`baselines/README.md`.
+
 ### PT-PT fidelity
 EUPTVID probability (independent signal), PT-PT compliance, PT-BR leakage, and Word Fidelity (WF). EUPTVID is **not** the numerical base of WF.
 
@@ -75,6 +81,8 @@ python runner.py setup
 python runner.py validate
 # Compare the leakage detector against the labelled reference set:
 python tools/gold_agreement.py --check-baseline baselines/gold-agreement.json
+# Assert the scoring scale has a true zero (no credit for content-free replies):
+python tools/check_scoring_floor.py
 ```
 
 `gold_agreement.py` is measurement only: it changes no score on the ranking path.

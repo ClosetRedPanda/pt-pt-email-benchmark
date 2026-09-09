@@ -21,7 +21,7 @@
       "throughput",
       "cost"
     ],
-    "instruction_adherence_pct": 13.33,
+    "instruction_adherence_pct": 0.0,
     "samples": 20,
     "semantic_preservation_pct": 0.0,
     "task_results": [
@@ -32,7 +32,7 @@
       },
       {
         "id": "elab_pt_02",
-        "instruction_adherence_pct": 50.0,
+        "instruction_adherence_pct": 0.0,
         "semantic_preservation_pct": 0.0
       },
       {
@@ -62,7 +62,7 @@
       },
       {
         "id": "elab_pt_08",
-        "instruction_adherence_pct": 33.3,
+        "instruction_adherence_pct": 0.0,
         "semantic_preservation_pct": 0.0
       },
       {
@@ -82,17 +82,17 @@
       },
       {
         "id": "elab_pt_12",
-        "instruction_adherence_pct": 33.3,
+        "instruction_adherence_pct": 0.0,
         "semantic_preservation_pct": null
       },
       {
         "id": "elab_pt_13",
-        "instruction_adherence_pct": 33.3,
+        "instruction_adherence_pct": 0.0,
         "semantic_preservation_pct": null
       },
       {
         "id": "elab_pt_14",
-        "instruction_adherence_pct": 50.0,
+        "instruction_adherence_pct": 0.0,
         "semantic_preservation_pct": 0.0
       },
       {
@@ -122,7 +122,7 @@
       },
       {
         "id": "elab_pt_20",
-        "instruction_adherence_pct": 66.7,
+        "instruction_adherence_pct": 0.0,
         "semantic_preservation_pct": null
       }
     ]
@@ -132,9 +132,9 @@
     "core/generation_evaluator.py": "db215f9f35b1a9b6ac728a025ae58e33f92b8558b197c9f8a5c6f4612cd6b9d1",
     "core/schemas.py": "aa0a568daf39de256c0dfe3484934a1cf53a2396f95947382a9a7f5ecc7a4694",
     "data/analysis_reference.jsonl": "413580dcb9a1dc0074291dc73bee8c41785d52163308e4792849887ce24199fb",
-    "data/elaboration_constraints.json": "317423d86f3454e1ae0b9061e6f53611563b914cda50ed6b72a5f42d5cbf09de",
+    "data/elaboration_constraints.json": "cddcd677c4f63a44934e2040acc4d15f2cafaa70b781397341d732093e4bf1ec",
     "data/elaboration_prompts_pt_pt.json": "04c4c8cf78123636c2db17e7be7d481afeb448527f9b4617456d43fbe3307529",
-    "tools/run_smoke_baseline.py": "c1b92cee3d8917db77fcbaa763359a00742e40fb013fe747eeb0d7b645f50e77"
+    "tools/run_smoke_baseline.py": "85e2bff8bd177c93b0a3f40318b1fbba1b467259e34b4955b2e3b023fcee2884"
   },
   "strategy": {
     "analysis": "One fixed schema-valid object for every sample.",

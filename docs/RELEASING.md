@@ -10,7 +10,7 @@ subsequent releases.
    `pyproject.toml` only when needed.
 2. **Do not automatically align `config.BENCHMARK_VERSION` with the package or
    release version.** It identifies score comparability, not publication. Keep
-   `lean-1.0` while scoring semantics and fixed task data remain comparable;
+   `lean-1.1` while scoring semantics and fixed task data remain comparable;
    change it only after a deliberate compatibility review when scores or data
    change.
 3. In `CITATION.cff`, optionally replace/supplement `ClosetRedPanda` in the

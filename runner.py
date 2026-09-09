@@ -19,6 +19,7 @@ from config import (
 )
 from core.api_client import OpenRouterClient
 from core.artifacts import build_manifest, sha256_bytes, sha256_file, write_manifest
+from core.languagetool_local import describe_local_languagetool
 from core.generation_evaluator import (
     constraint_echo_vocabulary,
     evaluate_generation_output,
@@ -83,6 +84,11 @@ def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[st
             root / "core" / "writing_quality.py",
             root / "core" / "scorecard.py",
             root / "runner.py",
+            # The constraint file supplies the executable criteria, so it is
+            # part of the scoring definition, not just an input. Hashing it
+            # here means a criterion retarget (e.g. closing a permissive
+            # pattern) is visible in every artifact's evaluator_versions.
+            ELABORATION_CONSTRAINTS,
         ]
         system_prompt = SYSTEM_PROMPT_ELABORATION
     from core.resources import EUPTVID, HUNSPELL_RESOURCES
@@ -109,6 +115,12 @@ def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[st
             **parameters,
             "system_prompt_sha256": sha256_bytes(system_prompt.encode("utf-8")),
             "python_version": sys.version,
+            # The LanguageTool engine and its rule sets are downloaded by the
+            # wrapper rather than pinned here, so grammar scores can move
+            # without any repository change. Recording the locally observed
+            # engine identity makes that movement visible in the manifest
+            # instead of silent. Empty when no checker was built.
+            "languagetool": describe_local_languagetool(),
         },
         command=list(sys.argv),
     )

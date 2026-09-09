@@ -12,6 +12,11 @@ This lean package deliberately makes fewer claims than the larger engineering ve
 - JSON-schema validity of the reference records.
 - Constraint-file integrity and regex loading.
 - Deterministic dialect/WF/WQ smoke checks.
+- **Scoring-floor anchoring**: `tools/check_scoring_floor.py` (run in CI and on
+  release) scores the shared no-content control against all 20 tasks and fails
+  if any task-specific criterion passes. A criterion that boilerplate satisfies
+  measures "is this an email", not adherence, so it is prohibited rather than
+  documented as a caveat.
 - Reproducibility of the scoring code from plain JSONL artifacts.
 - New result artifacts have strict row validation and a hash-bound sidecar manifest.
 - `compare.py` rejects missing manifests by default and rejects incompatible

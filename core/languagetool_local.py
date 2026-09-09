@@ -6,8 +6,10 @@ and never configures a remote LanguageTool endpoint.
 
 from __future__ import annotations
 
+import re
 import threading
-from typing import Any, Dict, List, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import language_tool_python  # type: ignore
@@ -17,6 +19,53 @@ except Exception:  # pragma: no cover - depends on environment
 _CHECKERS: Dict[str, Any] = {}
 _CHECKER_LOCKS: Dict[str, threading.Lock] = {}
 _CACHE_LOCK = threading.Lock()
+# Engine identity, recorded when a checker is first built. The Java engine and
+# its rule sets are downloaded by `language_tool_python`, not by this
+# repository, so the wrapper version alone does not identify the ruleset that
+# produced a grammar score. Surfacing it lets a run manifest bind results to
+# the engine that actually ran.
+_ENGINE_VERSIONS: Dict[str, str] = {}
+
+
+def _detect_engine_version(checker: Any) -> Optional[str]:
+    """Best-effort LanguageTool engine version, from the wrapper's own state.
+
+    Reads attributes only. It must never construct a server, make a network
+    call, or raise: an absent or unexpected engine stays absent in the manifest
+    rather than becoming a fabricated version string or a hard failure.
+    """
+    for attribute in ("ltp_version", "language_tool_version", "engine_version"):
+        value = getattr(checker, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    install_path = getattr(checker, "install_path", None)
+    if install_path:
+        # The extracted directory name carries the engine version.
+        try:
+            name = Path(str(install_path)).name
+        except OSError:
+            return None
+        if re.match(r"^[0-9]+(\.[0-9]+)+$", name):
+            return name
+    return None
+
+
+def describe_local_languagetool() -> Dict[str, Any]:
+    """Return locally observed LanguageTool identity for a run manifest.
+
+    Empty when no local checker has been built, so callers recording this in a
+    manifest get an explicit absence rather than an inferred version.
+    """
+    with _CACHE_LOCK:
+        languages = sorted(_CHECKERS)
+        versions = dict(_ENGINE_VERSIONS)
+    return {
+        "mode": "local",
+        "wrapper_version": versions.get("__wrapper__"),
+        "languages": languages,
+        "engine_versions": {language: versions[language] for language in languages if language in versions},
+        "engine_version_unrecorded": [language for language in languages if language not in versions],
+    }
 
 
 def _get_checker(language: str) -> Tuple[Any, threading.Lock]:
@@ -43,6 +92,12 @@ def _get_checker(language: str) -> Tuple[Any, threading.Lock]:
         lock = threading.Lock()
         _CHECKERS[language] = checker
         _CHECKER_LOCKS[language] = lock
+        version = _detect_engine_version(checker)
+        if version:
+            _ENGINE_VERSIONS[language] = version
+        wrapper = getattr(language_tool_python, "__version__", None)
+        if isinstance(wrapper, str) and wrapper.strip():
+            _ENGINE_VERSIONS["__wrapper__"] = wrapper.strip()
         return checker, lock
 
 
@@ -140,6 +195,7 @@ def close_local_languagetool() -> None:
         checkers = list(_CHECKERS.values())
         _CHECKERS.clear()
         _CHECKER_LOCKS.clear()
+        _ENGINE_VERSIONS.clear()
     for checker in checkers:
         try:
             close = getattr(checker, "close", None)
