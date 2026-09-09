@@ -1,11 +1,2 @@
-httpx>=0.27.0
-jsonschema>=4.22.0
-requests>=2.31.0
-language-tool-python>=2.9.0
-spacy>=3.7.0
-pytest>=8.0
-# EUPTVID variety classifier. The model file itself is a managed resource
-# fetched by `python runner.py setup` (see models/README.md).
-# Note: fasttext 0.9.x predates NumPy 2; core/pt_dialect.py adapts its
-# predict() call so it works on both NumPy 1.x and 2.x.
-fasttext>=0.9.3
+# Compatibility entry point. The authoritative, hash-locked environment is below.
+-r requirements.lock

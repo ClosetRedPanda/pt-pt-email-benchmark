@@ -1,0 +1,148 @@
+{
+  "analysis": {
+    "action_req_acc_pct": 15.0,
+    "category_acc_pct": 0.0,
+    "entity_f1": 0.0,
+    "language_variant_acc_pct": 50.0,
+    "samples": 20,
+    "schema_validity_pct": 100.0,
+    "sentiment_acc_pct": 40.0,
+    "urgency_acc_pct": 35.0
+  },
+  "baseline_id": "deterministic-constant-smoke-v1",
+  "baseline_type": "deterministic non-LLM pipeline smoke/floor",
+  "generation": {
+    "excluded_metrics": [
+      "PT-PT fidelity",
+      "PT-BR leakage",
+      "Word Fidelity",
+      "writing quality",
+      "latency",
+      "throughput",
+      "cost"
+    ],
+    "instruction_adherence_pct": 13.33,
+    "samples": 20,
+    "semantic_preservation_pct": 0.0,
+    "task_results": [
+      {
+        "id": "elab_pt_01",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_02",
+        "instruction_adherence_pct": 50.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_03",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_04",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_05",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_06",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_07",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_08",
+        "instruction_adherence_pct": 33.3,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_09",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_10",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_11",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_12",
+        "instruction_adherence_pct": 33.3,
+        "semantic_preservation_pct": null
+      },
+      {
+        "id": "elab_pt_13",
+        "instruction_adherence_pct": 33.3,
+        "semantic_preservation_pct": null
+      },
+      {
+        "id": "elab_pt_14",
+        "instruction_adherence_pct": 50.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_15",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_16",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_17",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": 0.0
+      },
+      {
+        "id": "elab_pt_18",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": null
+      },
+      {
+        "id": "elab_pt_19",
+        "instruction_adherence_pct": 0.0,
+        "semantic_preservation_pct": null
+      },
+      {
+        "id": "elab_pt_20",
+        "instruction_adherence_pct": 66.7,
+        "semantic_preservation_pct": null
+      }
+    ]
+  },
+  "ranking_eligible": false,
+  "source_sha256": {
+    "core/generation_evaluator.py": "db215f9f35b1a9b6ac728a025ae58e33f92b8558b197c9f8a5c6f4612cd6b9d1",
+    "core/schemas.py": "aa0a568daf39de256c0dfe3484934a1cf53a2396f95947382a9a7f5ecc7a4694",
+    "data/analysis_reference.jsonl": "413580dcb9a1dc0074291dc73bee8c41785d52163308e4792849887ce24199fb",
+    "data/elaboration_constraints.json": "317423d86f3454e1ae0b9061e6f53611563b914cda50ed6b72a5f42d5cbf09de",
+    "data/elaboration_prompts_pt_pt.json": "04c4c8cf78123636c2db17e7be7d481afeb448527f9b4617456d43fbe3307529",
+    "tools/run_smoke_baseline.py": "c1b92cee3d8917db77fcbaa763359a00742e40fb013fe747eeb0d7b645f50e77"
+  },
+  "strategy": {
+    "analysis": "One fixed schema-valid object for every sample.",
+    "constant_generation_text": "Assunto: Resposta ao seu pedido\n\nExmo. Senhor,\n\nAgradecemos o seu contacto. Registámos o pedido e responderemos assim que possível.\n\nCom os melhores cumprimentos,\nEquipa de Apoio",
+    "generation": "One fixed generic PT-PT email for every task."
+  },
+  "uses_llm": false,
+  "uses_network": false,
+  "uses_test_labels_to_choose_predictions": false,
+  "warning": "Not a candidate-model result and not evidence of model quality. Do not place it in model rankings."
+}

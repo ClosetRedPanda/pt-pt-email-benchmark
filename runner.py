@@ -57,7 +57,10 @@ def _source_hashes(paths: Iterable[Path]) -> Dict[str, str]:
 
 def _dependency_versions() -> Dict[str, str]:
     versions = {}
-    for package in ("httpx", "jsonschema", "language-tool-python", "spylls"):
+    for package in (
+        "fasttext", "httpx", "jsonschema", "language-tool-python", "numpy",
+        "pt-core-news-sm", "requests", "spacy", "spylls",
+    ):
         try:
             versions[package] = metadata.version(package)
         except metadata.PackageNotFoundError:
@@ -82,12 +85,11 @@ def _write_run_manifest(out: Path, *, kind: str, model: str, parameters: Dict[st
             root / "runner.py",
         ]
         system_prompt = SYSTEM_PROMPT_ELABORATION
-    from core.resources import EUPTVID
+    from core.resources import EUPTVID, HUNSPELL_RESOURCES
     resource_paths = [
-        root / "docs" / name for name in ("pt_PT.dic", "pt_PT.aff", "pt_BR.dic", "pt_BR.aff")
-    ] + [
-        # Managed resource: hashed into the manifest so a result is bound to the
-        # exact classifier build that produced it.
+        *(resource.path for resource in HUNSPELL_RESOURCES),
+        # Managed resources are hashed into the manifest so a result is bound
+        # to the exact evaluator inputs that produced it.
         EUPTVID.path,
         root / "data" / "wq_length_neutral_calibration.json",
     ]
@@ -333,7 +335,7 @@ def load_constraints() -> Dict[str, Any]:
 def main() -> None:
     p = argparse.ArgumentParser(description="Lean PT-PT/English email benchmark")
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("setup", help="download and verify managed model resources")
+    s = sub.add_parser("setup", help="download and verify managed evaluator resources")
     s.add_argument("--force", action="store_true", help="re-download even if already present")
     s = sub.add_parser("validate", help="run local benchmark integrity checks")
     s = sub.add_parser("analysis", help="run structured analysis against the fixed reference set")

@@ -12,3 +12,9 @@ models/*.bin
 
 # ...but keep the provenance README for the models directory tracked.
 !models/README.md
+
+# Managed Hunspell resources (fetched and verified by `python runner.py setup`)
+docs/pt_PT.aff
+docs/pt_PT.dic
+docs/pt_BR.aff
+docs/pt_BR.dic

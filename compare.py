@@ -446,7 +446,7 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
             lines.extend([
                 "",
                 "  Note: PT-PT compliance, PT-BR leakage, and Word fidelity are unavailable",
-                "  because docs/pt_PT.dic and docs/pt_PT.aff are missing.",
+                "  because managed Hunspell files are unavailable; run `python runner.py setup`.",
             ])
     return "\n".join(lines)
 

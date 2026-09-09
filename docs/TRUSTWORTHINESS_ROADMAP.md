@@ -58,7 +58,10 @@ Known limitations:
 - Paired bootstrap comparison is available, but the task set remains small and the
 	interval reflects uncertainty across these tasks rather than population validity.
 - The WQ calibration is not demonstrated to have independent multi-rater reliability.
-- Instruction and semantic checks remain regex/pattern-based proxies.
+- Instruction and semantic checks remain regex/pattern-based proxies. The
+  committed constant smoke baseline scores 13.33% mean adherence and reaches
+  50–66.7% on some tasks without task-specific content, directly demonstrating
+  a permissive-pattern floor that must be fixed before close model ranking.
 - The result validator and manifest are versioned, but the row contract is not yet
 	a complete formal schema for every optional provider field.
 
@@ -300,7 +303,7 @@ lexical or grammatical violation.
 Documented limitations of the lexical-contrast layer (as of the 2026-09
 release, all by design):
 
-- the two bundled dictionaries are not dialect-matched siblings: pt_BR derives
+- the two managed dictionaries are not dialect-matched siblings: pt_BR derives
   compounds (e.g. `intranet` via `intra-` + `net`) that pt_PT.dic does not
   cover, so a correct business word absent from pt_PT.dic reads as a PT-BR
   leak. This is the dictionary-coverage-gap class; it is out of scope for the

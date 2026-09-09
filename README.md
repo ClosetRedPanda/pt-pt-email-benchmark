@@ -2,9 +2,14 @@
 
 **An open-source benchmark for evaluating large language models on European Portuguese (PT-PT) business email understanding and generation.**
 
-The **PT-PT Email LLM Benchmark** evaluates how well language models handle real-world business-email tasks in European Portuguese, with particular attention to **PT-PT linguistic fidelity, PT-BR leakage, structured email understanding, generation quality, and deterministic evaluation**.
+The **PT-PT Email LLM Benchmark** evaluates how well language models handle realistic business-email tasks in European Portuguese, with particular attention to **PT-PT linguistic fidelity, PT-BR leakage, structured email understanding, generation quality, and deterministic evaluation**.
 
 Unlike benchmarks that rely primarily on LLM-as-a-judge scoring, this project uses **transparent, deterministic evaluation methods** that can be reproduced locally and audited.
+
+> **Data provenance:** the benchmark samples are **LLM-assisted synthetic data**,
+> not a corpus of real customer email. Generator/prompt details that were not
+> preserved are explicitly marked unknown in `data/PROVENANCE.json`; see
+> `docs/DATA_PROVENANCE.md` before interpreting or extending the dataset.
 
 The benchmark measures:
 
@@ -62,31 +67,28 @@ The prior versions accumulated application-style machinery around the benchmark.
 ## Run
 
 ```bash
-python -m pip install -r requirements.txt
-# Required by the PT-PT grammar rules (spaCy model is not a pip dependency):
-python -m spacy download pt_core_news_sm
-# Required by the Hunspell spelling fallback:
-python -m pip install spylls
-# Fetch and verify managed model resources (EUPTVID classifier, ~71 MB):
+python -m venv .venv
+. .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install --require-hashes -r requirements.lock
+# Fetch revision-pinned, SHA-256-verified EUPTVID and Hunspell resources:
 python runner.py setup
 python runner.py validate
 ```
 
-`python runner.py setup` downloads the model files that are too large to commit,
-pinned to an exact upstream revision and verified by SHA-256. See
-`models/README.md`. Re-run it any time; it is a no-op when everything is already
+`python runner.py setup` downloads external evaluator resources that are not committed,
+pinned to an exact upstream revision and verified by SHA-256. See `models/README.md` and `docs/LICENSE-THIRD-PARTY.md`. Re-run it any time; it is a no-op when everything is already
 present and valid.
 
 ### External requirements
 
 | Requirement | Needed for | If missing |
 | --- | --- | --- |
-| `pt_core_news_sm` (spaCy) | PT-PT grammar rules (proclisis, `ter`/`haver`, gerund) | Those rules are skipped; dialect signals lose grammar evidence |
-| `spylls` | Hunspell dictionary loading | PT-PT compliance, PT-BR leakage and WF report as unavailable |
+| `pt_core_news_sm==3.8.0` (installed by the lock) | PT-PT grammar rules (proclisis, `ter`/`haver`, gerund) | Those rules are skipped; dialect signals lose grammar evidence |
+| `spylls` (installed by the lock) | Hunspell dictionary loading | PT-PT compliance, PT-BR leakage and WF report as unavailable |
 | Java runtime (JRE 8+) | `language_tool_python` local server | LanguageTool grammar checks are skipped |
-| `docs/pt_PT.*`, `docs/pt_BR.*` | Hunspell dictionaries (bundled) | As above |
+| Managed `docs/pt_PT.*`, `docs/pt_BR.*` | Hunspell dictionaries fetched by `runner.py setup` | As above |
 
-Pin the spaCy model version alongside the package: dependency labels and
+The lock pins `pt_core_news_sm==3.8.0` alongside spaCy: dependency labels and
 morphological features can change between model releases, and the PT-PT
 grammar rules read those features directly, so an unpinned model can move
 compliance results without any code change. The installed version is recorded
@@ -127,10 +129,10 @@ Legacy JSONL files remain immutable and are not silently rescored.
 
 `data/elaboration_prompts_pt_pt.json` and `data/elaboration_constraints.json` define the generation tasks and executable checks.
 
-`data/wq_human_reference.jsonl` is retained as calibration evidence, not as a claim of independent multi-rater validation.
+`data/wq_human_reference.jsonl` is retained as calibration evidence, not as a claim of independent multi-rater validation. All sample provenance and known metadata gaps are recorded in `data/PROVENANCE.json` and `docs/DATA_PROVENANCE.md`.
 
 ## Deliberate limitations
 
-The trimmed distribution does not bundle the EUPTVID fastText model. Hunspell dictionaries are expected at `docs/pt_PT.*` and `docs/pt_BR.*`; without them, PT-PT compliance, PT-BR leakage, and WF remain unavailable. LanguageTool is local through `language_tool_python`.
+The distribution bundles neither the EUPTVID fastText model nor the differently licensed Hunspell dictionaries. `python runner.py setup` fetches immutable, checksum-verified copies; without them, PT-PT compliance, PT-BR leakage, and WF remain unavailable. LanguageTool is local through `language_tool_python`.
 
 Primary results should remain multidimensional. A single "overall quality" number is intentionally not produced.

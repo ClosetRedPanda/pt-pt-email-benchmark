@@ -26,6 +26,8 @@ and do not mean. Mirrors the "model card" convention for datasets/benchmarks.
 | Structured analysis | 20 rows | Explicit ground truth in `data/analysis_reference.jsonl` |
 | Generation (PT-PT elaboration) | 20 constraint sets | Executable deterministic checks in `data/elaboration_constraints.json` |
 
+> **Provenance:** all benchmark samples are LLM-assisted synthetic data. The original generator, prompts, and dates were not fully preserved; see `DATA_PROVENANCE.md`.
+>
 > **Caveat:** these sets are currently small. Scores are useful for debugging
 > and directional signal, not yet for tight statistical ranking. Growing the
 > sets is an open, high-priority task.
@@ -52,8 +54,8 @@ and do not mean. Mirrors the "model card" convention for datasets/benchmarks.
 
 ## Known limitations
 
-- EUPTVID is a managed resource fetched at setup (not committed).
-- Dictionary-backed signals depend on bundled Hunspell dictionaries; if
+- EUPTVID and Hunspell dictionaries are revision-pinned, checksum-verified managed resources fetched at setup (not committed).
+- Dictionary-backed signals depend on those managed Hunspell dictionaries; if
   absent they report unavailable, never a fabricated score.
 - LanguageTool runs locally and requires a JRE.
 - Human WQ reference is calibration evidence, not a passed multi-rater gate.
@@ -61,5 +63,4 @@ and do not mean. Mirrors the "model card" convention for datasets/benchmarks.
 
 ## Redistribution
 
-See `LICENSE` (Apache-2.0). Bundled third-party assets retain their own
-licences and provenance (see `docs/README.md`).
+See `LICENSE` (Apache-2.0). Downloaded third-party resources retain their own licences and provenance (see `LICENSE-THIRD-PARTY.md`).

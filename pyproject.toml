@@ -1,21 +1,42 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=75,<76", "wheel>=0.45,<0.46"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pt-email-benchmark-lean"
 version = "1.0.0"
-description = "Lean, auditable PT-PT/English email benchmark"
-requires-python = ">=3.10"
-dependencies = [
-  "httpx>=0.27.0",
-  "jsonschema>=4.22.0",
-  "requests>=2.31.0",
-  "language-tool-python>=2.9.0",
-  "spylls>=0.1.7",
+description = "Deterministic benchmark for PT-PT business-email understanding and generation"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = {text = "Apache-2.0"}
+authors = [{name = "ClosetRedPanda"}]
+keywords = ["benchmark", "european-portuguese", "llm", "email", "nlp"]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
 ]
+dependencies = [
+  "fasttext>=0.9.3,<0.10",
+  "httpx>=0.28,<0.29",
+  "jsonschema>=4.25,<5",
+  "language-tool-python>=3.4,<3.5",
+  "numpy>=2.3,<2.4",
+  "requests>=2.32,<3",
+  "spacy>=3.8,<3.9",
+  "spylls>=0.1.7,<0.2",
+  "pt-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.8.0/pt_core_news_sm-3.8.0-py3-none-any.whl",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.4,<9"]
+
+[project.urls]
+Repository = "https://github.com/ClosetRedPanda/pt-pt-email-benchmark"
+Documentation = "https://github.com/ClosetRedPanda/pt-pt-email-benchmark/tree/main/docs"
+Issues = "https://github.com/ClosetRedPanda/pt-pt-email-benchmark/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-ra"
 pythonpath = ["."]

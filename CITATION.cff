@@ -1,0 +1,31 @@
+cff-version: "1.2.0"
+message: "If you use this benchmark, please cite the software release and archive the exact result manifest."
+title: "PT-PT Email LLM Benchmark"
+type: software
+authors:
+  - name: "ClosetRedPanda"
+    website: "https://github.com/ClosetRedPanda"
+
+# OPTIONAL PERSONAL-IDENTITY SECTION FOR THE MAINTAINER
+# Replace the screen-name author above, or add a second author, using:
+#  - family-names: "YOUR_FAMILY_NAME"
+#    given-names: "YOUR_GIVEN_NAMES"
+#    orcid: "https://orcid.org/0000-0000-0000-0000"
+#    affiliation: "YOUR_AFFILIATION"
+# Do not publish placeholders. Keep ClosetRedPanda if a pseudonymous citation is preferred.
+
+abstract: >-
+  A deterministic benchmark for European Portuguese business-email
+  understanding, generation, dialect fidelity, and writing-quality signals.
+  Its benchmark samples are LLM-assisted synthetic data.
+repository-code: "https://github.com/ClosetRedPanda/pt-pt-email-benchmark"
+url: "https://github.com/ClosetRedPanda/pt-pt-email-benchmark"
+license: "Apache-2.0"
+keywords:
+  - "European Portuguese"
+  - "PT-PT"
+  - "email"
+  - "LLM benchmark"
+  - "synthetic data"
+# After Zenodo mints a DOI, add: doi: "10.5281/zenodo.XXXXXXX"
+# Add version and date-released only when a corresponding release actually exists.

@@ -1,0 +1,5 @@
+# Managed dictionaries are large generated resources, not reviewable source.
+docs/pt_PT.aff binary
+docs/pt_PT.dic binary
+docs/pt_BR.aff binary
+docs/pt_BR.dic binary

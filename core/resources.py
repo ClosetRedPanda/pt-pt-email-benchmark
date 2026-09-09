@@ -50,8 +50,9 @@ class ManagedResource:
 
 
 # `model_quantized.ftz` is the quantized EUPTVID fastText variety classifier.
-# Pinned to an immutable commit rather than a branch: resolving `main` would
-# let the upstream repository change the model under a fixed benchmark version.
+# Revisions and digests are immutable benchmark inputs; changing any of them
+# requires a benchmark/evaluator version bump and makes manifests intentionally
+# incompatible.
 EUPTVID = ManagedResource(
     key="euptvid",
     relative_path="models/model_quantized.ftz",
@@ -60,13 +61,71 @@ EUPTVID = ManagedResource(
         "f58c96b242d63b2c48f98cfb00045e4cf8cdf6b0/model_quantized.ftz"
     ),
     sha256="00add97008d34b43803471daedb60d910de9b1eac15fc00814c336a4b23f0f6d",
-    size_bytes=71170864,
+    size_bytes=71_170_864,
     description="EUPTVID PT-PT/PT-BR fastText variety classifier (quantized)",
-    license_note="MIT (duarteocarmo/fasttext-euptvid)",
+    license_note="MIT; upstream: https://huggingface.co/duarteocarmo/fasttext-euptvid",
 )
 
-MANAGED_RESOURCES: Dict[str, ManagedResource] = {EUPTVID.key: EUPTVID}
+# LibreOffice dictionary files are deliberately not redistributed by this
+# Apache-2.0 repository. Setup fetches the exact bytes that were previously
+# bundled, from one immutable LibreOffice commit, and verifies each SHA-256
+# before an evaluator may load it.
+_LIBREOFFICE_DICTIONARIES_REVISION = "1e848fbddd7fd8e03fb696ecc03ee1068fab141c"
+_LIBREOFFICE_RAW = (
+    "https://raw.githubusercontent.com/LibreOffice/dictionaries/"
+    f"{_LIBREOFFICE_DICTIONARIES_REVISION}"
+)
+_HUNSPELL_LICENSE = (
+    "GPL-2.0-or-later OR LGPL-2.1-or-later OR MPL-1.1; "
+    "upstream: https://github.com/LibreOffice/dictionaries"
+)
 
+HUNSPELL_PT_PT_AFF = ManagedResource(
+    key="hunspell_pt_pt_aff",
+    relative_path="docs/pt_PT.aff",
+    url=f"{_LIBREOFFICE_RAW}/pt_PT/pt_PT.aff",
+    sha256="975a209fcc892cb382fa5f34a28c391a39668661ce373ae071287809c5fcae24",
+    size_bytes=95_089,
+    description="LibreOffice Hunspell affix rules for European Portuguese",
+    license_note=_HUNSPELL_LICENSE,
+)
+HUNSPELL_PT_PT_DIC = ManagedResource(
+    key="hunspell_pt_pt_dic",
+    relative_path="docs/pt_PT.dic",
+    url=f"{_LIBREOFFICE_RAW}/pt_PT/pt_PT.dic",
+    sha256="e29ba2d7aa8a2ad43e9cb46ac6473064b661545c87002aea90e18899d98d3cc9",
+    size_bytes=1_485_977,
+    description="LibreOffice Hunspell word list for European Portuguese",
+    license_note=_HUNSPELL_LICENSE,
+)
+HUNSPELL_PT_BR_AFF = ManagedResource(
+    key="hunspell_pt_br_aff",
+    relative_path="docs/pt_BR.aff",
+    url=f"{_LIBREOFFICE_RAW}/pt_BR/pt_BR.aff",
+    sha256="21d8ad2a769a60e17e2b5ea4ef11d4d593a58b9e2a82d642ef82d6a4c5523865",
+    size_bytes=979_792,
+    description="LibreOffice Hunspell affix rules for Brazilian Portuguese",
+    license_note=_HUNSPELL_LICENSE,
+)
+HUNSPELL_PT_BR_DIC = ManagedResource(
+    key="hunspell_pt_br_dic",
+    relative_path="docs/pt_BR.dic",
+    url=f"{_LIBREOFFICE_RAW}/pt_BR/pt_BR.dic",
+    sha256="a38bfb26b68ece2834e79fe83e48d5792652970ace12db89d1b9674bf9933183",
+    size_bytes=4_477_695,
+    description="LibreOffice Hunspell word list for Brazilian Portuguese",
+    license_note=_HUNSPELL_LICENSE,
+)
+
+HUNSPELL_RESOURCES = (
+    HUNSPELL_PT_PT_AFF,
+    HUNSPELL_PT_PT_DIC,
+    HUNSPELL_PT_BR_AFF,
+    HUNSPELL_PT_BR_DIC,
+)
+MANAGED_RESOURCES: Dict[str, ManagedResource] = {
+    resource.key: resource for resource in (EUPTVID, *HUNSPELL_RESOURCES)
+}
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()

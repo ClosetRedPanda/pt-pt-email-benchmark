@@ -1205,16 +1205,21 @@ def test_p3_7_constraint_patterns_have_no_duplicate_alternatives():
 
 
 # ---------------------------------------------------------------------------
-# Managed external resources (EUPTVID)
+# Managed external resources
 # ---------------------------------------------------------------------------
 
-def test_managed_resource_declares_pinned_revision_and_digest():
-    from core.resources import EUPTVID
-    # A branch name would let upstream change the model under a fixed
-    # benchmark version; the URL must pin an immutable commit.
-    assert "/resolve/main/" not in EUPTVID.url
-    assert len(EUPTVID.sha256) == 64
+def test_managed_resources_declare_pinned_revisions_and_digests():
+    from core.resources import EUPTVID, HUNSPELL_RESOURCES, MANAGED_RESOURCES
+    assert len(MANAGED_RESOURCES) == 5
     assert EUPTVID.relative_path == "models/model_quantized.ftz"
+    assert {resource.relative_path for resource in HUNSPELL_RESOURCES} == {
+        "docs/pt_PT.aff", "docs/pt_PT.dic", "docs/pt_BR.aff", "docs/pt_BR.dic",
+    }
+    for resource in MANAGED_RESOURCES.values():
+        assert "/resolve/main/" not in resource.url
+        assert "/master/" not in resource.url
+        assert len(resource.sha256) == 64
+        assert resource.size_bytes > 0
 
 
 def test_managed_resource_rejects_corrupted_file(tmp_path, monkeypatch):

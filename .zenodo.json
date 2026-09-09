@@ -1,0 +1,27 @@
+{
+  "title": "PT-PT Email LLM Benchmark",
+  "upload_type": "software",
+  "description": "Deterministic evaluation of LLM business-email understanding and generation in European Portuguese. Benchmark samples are LLM-assisted synthetic data; see the repository provenance statement.",
+  "creators": [
+    {
+      "name": "ClosetRedPanda"
+    }
+  ],
+  "license": "Apache-2.0",
+  "access_right": "open",
+  "keywords": [
+    "European Portuguese",
+    "PT-PT",
+    "email",
+    "LLM benchmark",
+    "synthetic data"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ClosetRedPanda/pt-pt-email-benchmark",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "notes": "Before deposition, optionally replace or supplement the pseudonymous creator using the editable identity section in CITATION.cff. Do not claim a DOI until Zenodo has minted it."
+}

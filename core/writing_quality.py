@@ -531,8 +531,22 @@ def _hunspell_stem(language: str) -> Optional[Path]:
     return None
 
 
+def _managed_hunspell_ready(language: str) -> bool:
+    """Return true only when both files for the requested dictionary verify."""
+    from core.resources import (
+        HUNSPELL_PT_BR_AFF, HUNSPELL_PT_BR_DIC, HUNSPELL_PT_PT_AFF,
+        HUNSPELL_PT_PT_DIC, verify,
+    )
+
+    lang = (language or "").strip().lower()
+    pair = (HUNSPELL_PT_BR_AFF, HUNSPELL_PT_BR_DIC) if lang.startswith("pt-br") else (
+        HUNSPELL_PT_PT_AFF, HUNSPELL_PT_PT_DIC
+    )
+    return all(verify(resource) is None for resource in pair)
+
+
 def _load_spellchecker(language: str) -> Any:
-    """Return a conservative spell checker using bundled Hunspell data.
+    """Return a conservative spell checker using verified managed Hunspell data.
 
     Preferred backend is spylls (the project dependency). On Unix-like
     systems, a system libhunspell is accepted as a compatibility fallback so
@@ -545,6 +559,9 @@ def _load_spellchecker(language: str) -> Any:
     key = str(stem)
     if key in _SPELLCHECKER_CACHE:
         return _SPELLCHECKER_CACHE[key]
+    if not _managed_hunspell_ready(language):
+        _SPELLCHECKER_CACHE[key] = None
+        return None
 
     dic = stem.with_suffix(".dic")
     aff = stem.with_suffix(".aff")

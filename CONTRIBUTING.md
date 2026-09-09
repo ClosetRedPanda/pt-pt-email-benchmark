@@ -25,8 +25,8 @@ comparable over time. If you want to add rows:
    with explicit ground truth.
 2. Make sure `python runner.py validate` passes (it asserts row counts and
    schema validity — adjust the count assertion deliberately).
-3. Document the provenance of every row (source email, licence, how the
-   ground truth was produced).
+3. Update `data/PROVENANCE.json` and `docs/DATA_PROVENANCE.md` with the row
+   source, synthetic/LLM-assistance details, licence, prompts, and review method.
 
 Ground truth must be *independently verifiable*, not authored by the person
 writing the evaluator that is tested against it.
@@ -48,14 +48,11 @@ writing the evaluator that is tested against it.
 
 ## Code style
 
-- Python 3.10+.
+- Python 3.11+.
 - One import per concern, grouped: stdlib, third-party, local.
 - Functions carry a docstring explaining *why* (design rationale), not just
   *what*.
 
 ## Licensing
 
-New files should be Apache-2.0 unless they embed third-party content. Any
-bundled third-party assets (e.g. the Hunspell dictionaries) must keep their
-original licence and provenance notice. See `docs/` for notes on bundled
-dictionaries.
+New files should be Apache-2.0 unless they embed third-party content. Do not commit third-party dictionary/model binaries. Add them as immutable, checksum-verified managed resources and document their original licence and provenance in `docs/LICENSE-THIRD-PARTY.md`.

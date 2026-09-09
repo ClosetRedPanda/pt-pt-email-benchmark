@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+from importlib import metadata
 from pathlib import Path
 
 BASE_DIR = Path(__file__).parent.parent.resolve()
@@ -170,11 +171,29 @@ _HUNSPELL_PTBR = None
 _HUNSPELL_PTBR_PATH = BASE_DIR / "docs" / "pt_BR"
 
 
+def _managed_hunspell_ready(resources: Tuple[Any, Any], label: str) -> bool:
+    """Verify both managed dictionary files before any parser sees them."""
+    from core.resources import verify
+
+    problems = [problem for resource in resources if (problem := verify(resource))]
+    if problems:
+        print(
+            f"[warn] Hunspell {label} unavailable ({'; '.join(problems)}). "
+            "Run `python runner.py setup` to fetch verified dictionaries.",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
 def get_ptpt_dictionary():
-    """Singleton loader for official Hunspell pt_PT dictionary."""
+    """Singleton loader for the checksum-verified Hunspell pt_PT dictionary."""
     global _HUNSPELL_PTPT
     if _HUNSPELL_PTPT is None:
-        if not _HUNSPELL_PTPT_PATH.with_suffix(".dic").exists():
+        from core.resources import HUNSPELL_PT_PT_AFF, HUNSPELL_PT_PT_DIC
+
+        resources = (HUNSPELL_PT_PT_AFF, HUNSPELL_PT_PT_DIC)
+        if not _managed_hunspell_ready(resources, "pt_PT"):
             _HUNSPELL_PTPT = False
         else:
             try:
@@ -187,10 +206,13 @@ def get_ptpt_dictionary():
 
 
 def get_ptbr_dictionary():
-    """Load the repository's official Brazilian Portuguese Hunspell dictionary."""
+    """Load the checksum-verified Brazilian Portuguese Hunspell dictionary."""
     global _HUNSPELL_PTBR
     if _HUNSPELL_PTBR is None:
-        if not _HUNSPELL_PTBR_PATH.with_suffix(".dic").exists():
+        from core.resources import HUNSPELL_PT_BR_AFF, HUNSPELL_PT_BR_DIC
+
+        resources = (HUNSPELL_PT_BR_AFF, HUNSPELL_PT_BR_DIC)
+        if not _managed_hunspell_ready(resources, "pt_BR"):
             _HUNSPELL_PTBR = False
         else:
             try:
@@ -208,6 +230,8 @@ def get_ptbr_dictionary():
 # --------------------------------------------------------------------------- #
 
 _SPACY_NLP = None
+SPACY_MODEL_DISTRIBUTION = "pt-core-news-sm"
+SPACY_MODEL_VERSION = "3.8.0"
 
 def get_spacy_nlp():
     """Lazy-load the spaCy Portuguese linguistic pipeline (singleton).
@@ -222,11 +246,17 @@ def get_spacy_nlp():
     if _SPACY_NLP is None:
         _SPACY_NLP = False
         try:
+            installed = metadata.version(SPACY_MODEL_DISTRIBUTION)
+            if installed != SPACY_MODEL_VERSION:
+                raise RuntimeError(
+                    f"expected {SPACY_MODEL_DISTRIBUTION}=={SPACY_MODEL_VERSION}, "
+                    f"found {installed}; install requirements.lock"
+                )
             import spacy
             # Only tagger, morphologizer, and parser are needed; disable NER for speed
             _SPACY_NLP = spacy.load("pt_core_news_sm", disable=["ner"])
-        except Exception as exc:  # model missing or not installable -> unavailable
-            print(f"[warn] Failed to load spaCy pt_core_news_sm: {exc}", file=sys.stderr)
+        except Exception as exc:  # model missing, wrong version, or not loadable
+            print(f"[warn] Failed to load pinned spaCy pt_core_news_sm: {exc}", file=sys.stderr)
     return _SPACY_NLP if _SPACY_NLP is not False else None
 
 
@@ -314,7 +344,7 @@ def _mask_nonlexical_spans(text: str) -> str:
 # URI scheme names (RFC 3986 §3.1 scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )).
 # A scheme name is a *protocol label* (http, https, ftp, wss, mailto, ...), not a
 # word of any human language: it is written identically in PT-PT, PT-BR, and every
-# other language. The bundled PT-BR dictionary happens to list a handful of these
+# other language. The managed PT-BR dictionary happens to list a handful of these
 # labels (http, https, ftp, jar, pop, iris, ...) while the PT-PT one does not, so a
 # bare protocol mention such as "via https" would otherwise be reported as a PT-BR
 # leak purely because of that dictionary-coverage artifact. Because the tokens here
@@ -348,7 +378,7 @@ def check_lexical_contrasts(
     text: str,
     echo_vocab: Optional[set] = None,
 ) -> List[Dict[str, Any]]:
-    """Find lexical items recognized by pt_BR but not pt_PT using bundled dictionaries.
+    """Find lexical items recognized by pt_BR but not pt_PT using managed dictionaries.
 
     This is deliberately resource-driven: the benchmark does not maintain a second
     hand-authored Portuguese word list. A token is reported only when the existing
