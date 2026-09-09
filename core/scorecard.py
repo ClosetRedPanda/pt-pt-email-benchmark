@@ -7,7 +7,9 @@ multidimensional by design.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
+
+from core._util import mean_or_none, percentile
 
 
 SCORECARD_SECTIONS = {
@@ -87,26 +89,6 @@ def _observed_elapsed_ms(records: List[Dict[str, Any]]) -> Optional[float]:
     if not starts:
         return None
     return max(0.0, (max(finishes) - min(starts)) * 1000.0)
-
-
-def _mean(values: Iterable[float]) -> Optional[float]:
-    vals = [float(v) for v in values if v is not None]
-    return (sum(vals) / len(vals)) if vals else None
-
-
-def _percentile(values: Iterable[float], p: float) -> float:
-    vals = sorted(float(v) for v in values if v is not None)
-    if not vals:
-        return 0.0
-    if len(vals) == 1:
-        return vals[0]
-    k = (len(vals) - 1) * (p / 100.0)
-    lo = int(k)
-    hi = min(lo + 1, len(vals) - 1)
-    if lo == hi:
-        return vals[lo]
-    frac = k - lo
-    return vals[lo] + (vals[hi] - vals[lo]) * frac
 
 
 def _safe_num(value: Any, default: float = 0.0) -> float:
@@ -223,25 +205,25 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "successful_samples": len(successful),
         "failed_samples": len(records) - len(successful),
         "ptpt_samples": len(ptpt),
-        "instruction_adherence_pct": _mean(adh),
-        "semantic_preservation_pct": _mean(sem),
-        "euptvid_probability": _mean(euptvid),
-        "ptpt_compliance_pct": _mean(comp),
-        "ptpt_compliance_graded_pct": _mean(comp_graded),
+        "instruction_adherence_pct": mean_or_none(adh),
+        "semantic_preservation_pct": mean_or_none(sem),
+        "euptvid_probability": mean_or_none(euptvid),
+        "ptpt_compliance_pct": mean_or_none(comp),
+        "ptpt_compliance_graded_pct": mean_or_none(comp_graded),
         "ptbr_leakage_pct": (sum(bool(v) for v in leakage_flags) / len(leakage_flags) * 100.0) if leakage_flags else None,
-        "wf_score": _mean(wf_vals),
-        "local_writing_quality_defect_only": _mean(wq_defect_only),
-        "local_writing_quality": _mean(wq),
+        "wf_score": mean_or_none(wf_vals),
+        "local_writing_quality_defect_only": mean_or_none(wq_defect_only),
+        "local_writing_quality": mean_or_none(wq),
         "languagetool_available": grammar_checked,
         "wq_evaluator_version": wq_version_reported,
-        "avg_grammar_errors_per_email": _mean(grammar),
-        "avg_spelling_errors_per_email": _mean(spelling),
+        "avg_grammar_errors_per_email": mean_or_none(grammar),
+        "avg_spelling_errors_per_email": mean_or_none(spelling),
         "structural_failures_pct": (sum(value > 0 for value in structural) / len(structural) * 100.0) if structural else None,
         "repetition_pct": (sum(value > 0 for value in repetition) / len(repetition) * 100.0) if repetition else None,
-        "latency_p50_ms": _percentile(latencies, 50),
-        "latency_p90_ms": _percentile(latencies, 90),
-        "latency_p95_ms": _percentile(latencies, 95),
-        "latency_p99_ms": _percentile(latencies, 99),
+        "latency_p50_ms": percentile(latencies, 50),
+        "latency_p90_ms": percentile(latencies, 90),
+        "latency_p95_ms": percentile(latencies, 95),
+        "latency_p99_ms": percentile(latencies, 99),
         "throughput_emails_per_min": (len(successful) / (wall_ms / 60000.0)) if throughput_available else None,
         "tokens_per_second": ((prompt_tokens + completion_tokens) / (wall_ms / 1000.0)) if throughput_available else None,
         "cost_per_1k_emails_usd": (total_cost / len(successful) * 1000.0) if (successful and total_cost is not None) else None,

@@ -33,14 +33,12 @@ WQ_EVALUATOR_VERSION = "3.5.0"
 # excellent.  The score therefore reserves a small, explicit headroom rather
 # than fabricating a positive-quality bonus from arbitrary text shape.
 WQ_CLEAN_SCORE_CEILING = 99.9
-WQ_EXACT_SCORE_CEILING = WQ_CLEAN_SCORE_CEILING
 
 import ctypes
 import ctypes.util
 import json
 import os
 import re
-import sys
 import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -438,46 +436,6 @@ def strip_fixture_headers(text: str) -> str:
             continue
         break
     return "\n".join(lines[idx:]).strip("\n")
-
-
-def wq_language_profile(lang: str, gold_dialect: Optional[str] = None) -> Optional[str]:
-    """BCP-47 LanguageTool profile for the sample's reference variety.
-
-    WQ asks how well-written the text is in its relevant variety, not how
-    closely it matches the benchmark's PT-PT target.
-    """
-    raw = (lang or "").strip().lower().replace("_", "-")
-    dialect = (gold_dialect or "").strip().upper()
-
-    if raw == "mixed":
-        # A genuinely mixed/unknown reference variety must not silently
-        # become PT-PT. If an explicit reference dialect is available, use it;
-        # otherwise leave WQ unscored rather than inventing a ruleset.
-        if dialect in ("PT-PT", "PTPT"):
-            return "pt-PT"
-        if dialect in ("PT-BR", "PTBR"):
-            return "pt-BR"
-        if dialect in ("EN", "EN-US", "EN-GB"):
-            return "en-US"
-        return None
-
-    if raw in ("pt-br", "ptbr") or raw.startswith("pt-br"):
-        return "pt-BR"
-    if raw in ("pt-pt", "ptpt", "pt") or raw.startswith("pt"):
-        return "pt-PT"
-    if raw in ("en", "en-us") or raw.startswith("en-us"):
-        return "en-US"
-    if raw.startswith("en-gb"):
-        return "en-GB"
-    if raw.startswith("en"):
-        return "en-US"
-    if dialect in ("PT-BR", "PTBR"):
-        return "pt-BR"
-    if dialect in ("PT-PT", "PTPT"):
-        return "pt-PT"
-    if dialect.startswith("EN"):
-        return "en-US"
-    return None
 
 
 def empty_wq_result(
@@ -1163,7 +1121,6 @@ def evaluate_writing_quality(
     Returns a dict with keys:
       writing_quality_score   — float [0–100] or None when text is excluded
       wq_defect_only_score    — objective defect-burden score before clean ceiling
-      wq_baseline_polish_score — supported positive-quality component retained for compatibility/auditability
       wq_quality_profile      — transparent component measurements
       grammar_error_count     — int
       spelling_error_count    — int
@@ -1258,10 +1215,6 @@ def evaluate_writing_quality(
             excluded_reason=f"WQ calibration unavailable: {exc}",
             fixture_headers_stripped=headers_stripped,
         )
-    polish_score = round(
-        (0.60 * profile["diversity_quality"] + 0.40 * profile["rhythm_quality"]) * 100.0,
-        1,
-    )
     # 100.0 is reserved as an unreachable exact ceiling so a clean sample is
     # not indistinguishable from a formally perfect score.
     if score >= WQ_CLEAN_SCORE_CEILING:
@@ -1270,7 +1223,6 @@ def evaluate_writing_quality(
     return {
         "writing_quality_score": round(score, 1),
         "wq_defect_only_score": round(defect_only_score, 1),
-        "wq_baseline_polish_score": polish_score,
         "wq_quality_profile": profile,
         "wq_calibration_version": WQ_CALIBRATION_VERSION,
         "grammar_error_count":    len(grammar_violations),

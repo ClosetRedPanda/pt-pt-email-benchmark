@@ -1,19 +1,15 @@
 """Small integrity suite: benchmark correctness, not application infrastructure."""
 from __future__ import annotations
-import hashlib
 import json
 import sys
 from pathlib import Path
 from config import ANALYSIS_REFERENCE, ELABORATION_CONSTRAINTS, ELABORATION_PROMPTS, DATA_DIR
+from core._util import sha256_file
 from core.generation_evaluator import load_constraint_map
-from core.schemas import EMAIL_ANALYSIS_SCHEMA, validate_email_analysis
+from core.schemas import validate_email_analysis
 from core.pt_dialect import evaluate_pt_dialect
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def run_validation() -> None:
@@ -24,7 +20,7 @@ def run_validation() -> None:
     for relative_path, expected in provenance["artifacts"].items():
         path = root / relative_path
         assert path.is_file(), f"provenance artifact missing: {relative_path}"
-        assert _sha256(path) == expected, f"update provenance digest for {relative_path}"
+        assert sha256_file(path) == expected, f"update provenance digest for {relative_path}"
 
     rows = [json.loads(x) for x in ANALYSIS_REFERENCE.read_text(encoding="utf-8").splitlines() if x.strip()]
     assert len(rows) == 20

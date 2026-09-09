@@ -16,20 +16,10 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
 ]
-dependencies = [
-  "fasttext>=0.9.3,<0.10",
-  "httpx>=0.28,<0.29",
-  "jsonschema>=4.25,<5",
-  "language-tool-python>=3.4,<3.5",
-  "numpy>=2.3,<2.4",
-  "requests>=2.32,<3",
-  "spacy>=3.8,<3.9",
-  "spylls>=0.1.7,<0.2",
-  "pt-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.8.0/pt_core_news_sm-3.8.0-py3-none-any.whl",
-]
 
-[project.optional-dependencies]
-dev = ["pytest>=8.4,<9"]
+# Dependency pinning lives in requirements.in/requirements.lock (the
+# hash-locked environment CI installs). A duplicate range block here would
+# drift from the lock, so it is deliberately omitted.
 
 [project.urls]
 Repository = "https://github.com/ClosetRedPanda/pt-pt-email-benchmark"
