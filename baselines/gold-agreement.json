@@ -1,6 +1,6 @@
 {
   "baseline_id": "gold-agreement-v1",
-  "benchmark_version": "lean-1.0",
+  "benchmark_version": "lean-1.1",
   "blindspot": {
     "missed_rows_wholly_invisible_to_mechanism": 3,
     "note": "'invisible to mechanism' means every token of the gold marker exists in BOTH managed dictionaries, so a detector built on their difference cannot represent it at all. This is a property of the method, not a coverage gap that more words can close."
