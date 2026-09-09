@@ -8,6 +8,8 @@ Multi-layered dialect evaluation conforming to PT_PT_EMAIL_LLM_BENCHMARK_FINAL_S
 4. Grammatical & syntactic constructions (gerund overuse, sentence-initial proclisis, ter/haver)
 """
 
+import json
+import os
 import re
 import sys
 from importlib import metadata
@@ -627,7 +629,7 @@ def check_lexicon_and_rules(text: str) -> List[Dict[str, Any]]:
 def is_predominantly_english(text: str) -> bool:
     """
     Detects if text is non-Portuguese/English by checking word recognition against
-    the official European Portuguese Hunspell dictionary (docs/pt_PT.dic).
+    the official European Portuguese Hunspell dictionary (dics/pt_PT.dic).
     """
     if not text or not text.strip():
         return False

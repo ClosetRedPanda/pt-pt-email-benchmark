@@ -22,7 +22,6 @@ for entry in (str(ROOT), str(ROOT / "tools")):
         sys.path.insert(0, entry)
 
 import gold_agreement  # noqa: E402
-from core._util import sha256_file  # noqa: E402
 
 TOOL = ROOT / "tools" / "gold_agreement.py"
 BASELINE = ROOT / "baselines" / "gold-agreement.json"
@@ -149,7 +148,7 @@ def test_baseline_binds_the_untracked_dictionaries():
     assert set(bound) == set(gold_agreement.MANAGED_RESOURCES)
     for rel, digest in bound.items():
         assert re.fullmatch(r"[0-9a-f]{64}", digest), rel
-        assert digest == sha256_file(ROOT / rel), f"{rel} drifted from the baseline"
+        assert digest == gold_agreement._sha256(ROOT / rel), f"{rel} drifted from the baseline"
     assert gold_agreement._comparable(gold_agreement.build_report())
 
 

@@ -12,14 +12,13 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from config import (
-    ANALYSIS_REFERENCE, DEFAULT_CONCURRENCY,
-    DEFAULT_MAX_TOKENS, ELABORATION_CONSTRAINTS,
+    ANALYSIS_REFERENCE, DEFAULT_CONCURRENCY, DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_TOKENS, DEFAULT_TIMEOUT, ELABORATION_CONSTRAINTS,
     ELABORATION_PROMPTS, RESULTS_DIR, SYSTEM_PROMPT_ANALYSIS,
     SYSTEM_PROMPT_ELABORATION, BENCHMARK_VERSION,
 )
 from core.api_client import OpenRouterClient
-from core._util import sha256_bytes, sha256_file
-from core.artifacts import build_manifest, write_manifest
+from core.artifacts import build_manifest, sha256_bytes, sha256_file, write_manifest
 from core.languagetool_local import describe_local_languagetool
 from core.generation_evaluator import (
     constraint_echo_vocabulary,
@@ -28,6 +27,7 @@ from core.generation_evaluator import (
 )
 from core.pt_dialect import evaluate_pt_dialect
 from core.scorecard import build_elaboration_scorecard
+from core.schemas import validate_email_analysis
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
 

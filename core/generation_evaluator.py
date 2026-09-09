@@ -6,7 +6,7 @@ Evaluates model-generated email responses across:
 """
 
 import re
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 # Template slots are inferred structurally without hardcoding word lists:
 # 1. Verbatim slots reproduced from the prompt ([...])

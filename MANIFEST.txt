@@ -15,7 +15,6 @@ baselines/smoke-baseline.json
 compare.py
 config.py
 core/__init__.py
-core/_util.py
 core/api_client.py
 core/artifacts.py
 core/generation_evaluator.py
@@ -32,8 +31,13 @@ data/analysis_reference.jsonl
 data/calibration_dataset.jsonl
 data/elaboration_constraints.json
 data/elaboration_prompts_pt_pt.json
+data/wq_calibration_candidates_human_verified.jsonl
+data/wq_calibration_human_review.jsonl
+data/wq_calibration_task7_human_verified.jsonl
 data/wq_human_reference.jsonl
 data/wq_length_neutral_calibration.json
+data/wq_rater_agreement_log.jsonl
+dics/README.md
 docs/BENCHMARK_CARD.md
 docs/DATA_PROVENANCE.md
 docs/DESIGN.md
@@ -53,8 +57,13 @@ tests/test_gold_agreement.py
 tests/test_package_integrity.py
 tests/test_reliability_patch.py
 tests/test_scoring_floor.py
+tools/apply_human_wq_review.py
 tools/check_scoring_floor.py
 tools/gold_agreement.py
+tools/prepare_wq_rater_overlap.py
 tools/rescore_artifact.py
+tools/review_wq_calibration.py
+tools/review_wq_rater_overlap.py
 tools/run_smoke_baseline.py
+tools/validate_human_wq_review.py
 validate.py

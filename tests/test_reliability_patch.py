@@ -21,8 +21,7 @@ from config import (
     ELABORATION_PROMPTS,
     SYSTEM_PROMPT_ELABORATION,
 )
-from core._util import sha256_bytes
-from core.artifacts import ArtifactValidationError, build_manifest, load_manifest, write_manifest
+from core.artifacts import ArtifactValidationError, build_manifest, load_manifest, sha256_bytes, write_manifest
 from core.generation_evaluator import load_constraint_map, evaluate_generation_output
 from compare import (
     _detector_reliability_notes,

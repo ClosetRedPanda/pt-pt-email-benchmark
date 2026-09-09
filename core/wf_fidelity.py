@@ -15,8 +15,11 @@ separate dialect-classification signal, while WF is derived from the
 structured PT-BR fidelity violations supplied by the dialect evaluator.
 """
 
+import os
 import re
-from typing import Dict, Any, Optional, Tuple
+import sys
+from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple
 
 from core.pt_dialect import evaluate_pt_dialect, is_predominantly_english
 

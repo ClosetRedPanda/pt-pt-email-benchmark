@@ -7,6 +7,7 @@ network call and does not inspect test labels when choosing predictions.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -16,7 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core._util import sha256_file
 from core.generation_evaluator import evaluate_generation_output, load_constraint_map
 from core.schemas import validate_email_analysis
 BASELINE_ID = "deterministic-constant-smoke-v1"
@@ -50,6 +50,10 @@ Agradecemos o seu contacto. RegistÃ¡mos o pedido e responderemos assim que possÃ
 
 Com os melhores cumprimentos,
 Equipa de Apoio"""
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def pct(values: list[bool]) -> float | None:
@@ -144,7 +148,7 @@ def build_report() -> dict[str, Any]:
                 "writing quality", "latency", "throughput", "cost",
             ],
         },
-        "source_sha256": {str(path.relative_to(ROOT)): sha256_file(path) for path in hashed_paths},
+        "source_sha256": {str(path.relative_to(ROOT)): sha256(path) for path in hashed_paths},
     }
 
 

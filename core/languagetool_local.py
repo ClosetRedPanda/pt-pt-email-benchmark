@@ -187,3 +187,19 @@ def check_local_languagetool(
         })
 
     return True, issues, True
+
+
+def close_local_languagetool() -> None:
+    """Best-effort cleanup for reusable local checker processes."""
+    with _CACHE_LOCK:
+        checkers = list(_CHECKERS.values())
+        _CHECKERS.clear()
+        _CHECKER_LOCKS.clear()
+        _ENGINE_VERSIONS.clear()
+    for checker in checkers:
+        try:
+            close = getattr(checker, "close", None)
+            if close:
+                close()
+        except Exception:
+            pass

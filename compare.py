@@ -4,19 +4,20 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Tuple
 
 from core.scorecard import build_elaboration_scorecard
-from core.statistics import DEFAULT_METRICS, paired_bootstrap
+from core.statistics import paired_bootstrap
 from core.pt_dialect import evaluate_pt_dialect
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
 from core.generation_evaluator import constraint_echo_vocabulary, evaluate_generation_output
-from core._util import sha256_bytes, sha256_file
 from core.artifacts import (
     ArtifactValidationError,
     build_manifest,
     load_manifest,
+    sha256_bytes,
+    sha256_file,
     validate_rows,
     write_manifest,
 )
@@ -673,7 +674,6 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
                     "latency_p50_ms", "latency_p90_ms", "latency_p95_ms",
                     "latency_p99_ms", "throughput_emails_per_min",
                     "tokens_per_second", "cost_per_1k_emails_usd",
-                    "cost_per_1k_emails_usd_known_only", "unknown_cost_samples",
                 )
             },
         }
@@ -767,12 +767,11 @@ def _metric_separability(
         "avg_grammar_errors_per_email": 1.0,
         "avg_spelling_errors_per_email": 1.0,
     }
-    # The scorecard's denominator dict keys a few metrics under names that
-    # differ from the summary field (grammar/spelling counts carry an `avg_`
-    # prefix in the summary but not in the denominator block).
+    # `denominators` keys off the per-row field name for some metrics, so the
+    # lookup needs an explicit alias rather than a string mangle.
     denom_keys = {
-        "avg_grammar_errors_per_email": "grammar_errors_per_email",
-        "avg_spelling_errors_per_email": "spelling_errors_per_email",
+        "local_writing_quality_defect_only": "local_writing_quality_defect_only",
+        "local_writing_quality": "local_writing_quality",
     }
     metrics: Dict[str, Any] = {}
     for key in metric_keys:
@@ -855,6 +854,10 @@ def _separability_lines(separability: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List[Dict[str, Any]]:
+    return _uncertainty_from_rows([read_jsonl(path) for path in paths], paths, repetitions=repetitions)
+
+
 def _uncertainty_from_rows(
     row_sets: List[List[Dict[str, Any]]],
     paths: List[Path],
@@ -886,12 +889,11 @@ def _uncertainty_from_rows(
 
 def _pretty_uncertainty(reports: List[Dict[str, Any]]) -> str:
     lines = ["", "=" * 72, "Paired uncertainty (second model minus first model)"]
-    # Same ordered list the bootstrap itself computes, so a metric can never be
-    # silently dropped from the text report while present in the JSON document.
+    metric_order = ("instruction_adherence_pct", "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct", "ptbr_leakage_pct", "wq_defect_only_score", "writing_quality_score")
     for report in reports:
         lines.extend(["-" * 72, f"  {report['first']}  ->  {report['second']}"])
         metrics = report["statistics"]["metrics"]
-        for metric in DEFAULT_METRICS:
+        for metric in metric_order:
             result = metrics.get(metric, {})
             if result.get("unavailable"):
                 lines.append(f"    {metric:<32} N/A")
@@ -1077,7 +1079,12 @@ def main() -> None:
         # per artifact.
         print("\n".join(_separability_lines(_metric_separability(summaries, GENERATION_RANKING_KEYS))))
         if not args.no_uncertainty:
-            print(_pretty_uncertainty(_uncertainty_from_rows(scored_rows, args.results)))
+            print(
+                _pretty_uncertainty(
+                    _uncertainty_from_rows(scored_rows, args.results) if scored_rows
+                    else _pairwise_uncertainty(args.results)
+                )
+            )
     if args.json:
         print(json.dumps(
             _json_comparison(
