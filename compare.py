@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -10,10 +11,24 @@ from core.statistics import paired_bootstrap
 from core.pt_dialect import evaluate_pt_dialect
 from core.wf_fidelity import compute_word_fidelity_from_dialect
 from core.writing_quality import evaluate_writing_quality
-from core.generation_evaluator import constraint_echo_vocabulary
-from core.artifacts import ArtifactValidationError, load_manifest, validate_rows
+from core.generation_evaluator import constraint_echo_vocabulary, evaluate_generation_output
+from core.artifacts import (
+    ArtifactValidationError,
+    build_manifest,
+    load_manifest,
+    sha256_bytes,
+    sha256_file,
+    validate_rows,
+    write_manifest,
+)
 from runner import load_constraints, read_jsonl, score_analysis
-from config import ANALYSIS_REFERENCE, ELABORATION_PROMPTS, BENCHMARK_VERSION
+from config import (
+    ANALYSIS_REFERENCE,
+    BENCHMARK_VERSION,
+    ELABORATION_CONSTRAINTS,
+    ELABORATION_PROMPTS,
+    SYSTEM_PROMPT_ELABORATION,
+)
 
 
 SECTION_LABELS = {
@@ -226,13 +241,136 @@ def _full_rescore_generation_records(
     return enriched
 
 
+def _refresh_criteria_records(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Re-run the executable criteria against stored content.
+
+    ``--rescore`` refreshes dialect, WF and WQ but deliberately leaves
+    ``instruction_adherence_pct`` and ``semantic_preservation_pct`` frozen, because
+    those are properties of the task definition, not of the evaluators. That is the
+    right default: silently re-grading an old run under new criteria would make a
+    before/after comparison look like a model change.
+
+    This function is the explicit opt-in. It recomputes both from the stored text
+    and the current constraint file, so a criteria retarget (e.g. closing a
+    permissive pattern) can be applied to existing outputs without new model
+    calls. The criteria are a pure function of stored content, so nothing here
+    touches the network or an LLM.
+    """
+    prompts = {
+        str(item["id"]): str(item.get("prompt") or "")
+        for item in json.loads(ELABORATION_PROMPTS.read_text(encoding="utf-8")).get("prompts", [])
+    }
+    constraints = load_constraints()
+    refreshed = []
+    for row in rows:
+        result = dict(row)
+        content = result.get("content")
+        if (
+            result.get("status", "success") != "success"
+            or result.get("error")
+            or not isinstance(content, str)
+            or not content.strip()
+        ):
+            refreshed.append(result)
+            continue
+        pid = str(result.get("id"))
+        ev = evaluate_generation_output(content, constraints.get(pid, {}), source_text=prompts.get(pid, ""))
+        result["instruction_adherence_pct"] = ev["instruction_adherence_score"]
+        result["semantic_preservation_pct"] = ev["semantic_preservation_score"]
+        refreshed.append(result)
+    return refreshed
+
+
+def _stamp_rescored_manifest(path: Path, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Write a sidecar for a fully re-derived artifact, recording current versions.
+
+    Honest only because every scoreable field is recomputed here: a rescored
+    dialect/WF/WQ artifact keeps its frozen criteria and must not be stamped.
+    """
+    root = Path(__file__).resolve().parent
+    models = {str(r.get("model")) for r in rows}
+    if len(models) != 1:
+        raise ArtifactValidationError(f"rescore requires exactly one model, found {sorted(models)}")
+    input_paths = [ELABORATION_PROMPTS, ELABORATION_CONSTRAINTS]
+    evaluator_paths = [
+        root / "core" / "generation_evaluator.py",
+        root / "core" / "pt_dialect.py",
+        root / "core" / "wf_fidelity.py",
+        root / "core" / "writing_quality.py",
+        root / "core" / "scorecard.py",
+        root / "runner.py",
+        root / "compare.py",
+        ELABORATION_CONSTRAINTS,
+    ]
+    from core.resources import EUPTVID, HUNSPELL_RESOURCES
+
+    resource_paths = [
+        *(resource.path for resource in HUNSPELL_RESOURCES),
+        EUPTVID.path,
+        root / "data" / "wq_length_neutral_calibration.json",
+    ]
+    manifest = build_manifest(
+        path,
+        kind="generation",
+        benchmark_version=BENCHMARK_VERSION,
+        model=next(iter(models)),
+        input_hashes={str(q.relative_to(root)): sha256_file(q) for q in input_paths},
+        evaluator_versions={str(q.relative_to(root)): sha256_file(q) for q in evaluator_paths},
+        resource_hashes={
+            str(q.relative_to(root)): sha256_file(q) if q.is_file() else "UNAVAILABLE"
+            for q in resource_paths
+        },
+        parameters={
+            "rescore": True,
+            "criteria_refreshed": True,
+            "source_artifact": path.name,
+            "system_prompt_sha256": sha256_bytes(SYSTEM_PROMPT_ELABORATION.encode("utf-8")),
+        },
+    )
+    write_manifest(path, manifest)
+    return manifest
+
+
+def _persist_rescored(source: Path, rows: List[Dict[str, Any]], out_dir: Path) -> None:
+    """Write re-derived rows and a manifest to a new artifact; never touch the source.
+
+    Refuses if the destination exists, so a re-derivation cannot quietly replace
+    the record of the run it was derived from.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    destination = out_dir / source.name
+    if destination.exists():
+        raise ArtifactValidationError(
+            f"refusing to overwrite existing re-derivation artifact: {destination}"
+        )
+    expected_ids = [
+        str(item["id"])
+        for item in json.loads(ELABORATION_PROMPTS.read_text(encoding="utf-8")).get("prompts", [])
+    ]
+    validate_rows(rows, kind="generation", expected_ids=expected_ids, strict=True)
+    destination.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False, sort_keys=True) for r in rows) + "\n",
+        encoding="utf-8",
+    )
+    _stamp_rescored_manifest(destination, rows)
+    print(f"[rescore] persisted re-derived artifact: {destination}", file=sys.stderr)
+
+
 def validate_comparison_artifacts(
     paths: List[Path],
     *,
     kind: str,
     allow_legacy: bool = False,
+    rescore: bool = False,
 ) -> List[Dict[str, Any]]:
-    """Validate artifacts and ensure comparable manifest metadata."""
+    """Validate artifacts and ensure comparable manifest metadata.
+
+    ``rescore`` means the caller will recompute every scoreable field from stored
+    content before scoring. A version mismatch is then a fact to report, not a
+    reason to refuse: refusing is what left ``compare.py --rescore`` unusable on any
+    artifact predating a criteria change, including the retarget that closed the
+    boilerplate floor.
+    """
     manifests: List[Dict[str, Any]] = []
     expected_ids = None
     if kind == "generation":
@@ -270,8 +408,19 @@ def validate_comparison_artifacts(
             if len(values) != 1:
                 raise ArtifactValidationError(f"artifacts disagree on {field}")
         if versioned[0].get("benchmark_version") != BENCHMARK_VERSION:
-            raise ArtifactValidationError(
-                f"artifacts use benchmark {versioned[0].get('benchmark_version')!r}, expected {BENCHMARK_VERSION!r}"
+            if not rescore:
+                raise ArtifactValidationError(
+                    f"artifacts use benchmark {versioned[0].get('benchmark_version')!r}, expected "
+                    f"{BENCHMARK_VERSION!r}. Their criteria-verdict fields are frozen, so either re-run "
+                    "generation, or pass --rescore to re-derive every score (including adherence) from "
+                    "stored content and stamp the result as a new artifact."
+                )
+            print(
+                f"[rescore] artifacts recorded under {versioned[0].get('benchmark_version')!r}; "
+                f"re-scoring every field with {BENCHMARK_VERSION!r} criteria. This is exploratory: the "
+                "sidecar still records the original run, and the numbers are not comparable with "
+                "artifacts produced under other criteria.",
+                file=sys.stderr,
             )
     return manifests
 
@@ -563,6 +712,13 @@ def main() -> None:
         help="use LanguageTool while re-scoring legacy dialect fields (slower)",
     )
     parser.add_argument(
+        "--rescore-output",
+        type=Path,
+        default=None,
+        help="with --rescore, persist re-derived rows plus a manifest into this new "
+             "directory instead of reporting only; existing artifacts are never modified",
+    )
+    parser.add_argument(
         "--allow-legacy",
         action="store_true",
         help="allow bare legacy JSONL artifacts for exploratory comparison",
@@ -572,6 +728,7 @@ def main() -> None:
         args.results,
         kind=args.kind,
         allow_legacy=args.allow_legacy or args.rescore,
+        rescore=args.rescore,
     )
     summaries = []
     if args.kind == "generation":
@@ -585,12 +742,29 @@ def main() -> None:
             rows = read_jsonl(path)
             if args.rescore:
                 rows = _full_rescore_generation_records(rows, use_languagetool=args.full_dialect_checks)
+                rows = _refresh_criteria_records(rows)
+                # A re-derivation never overwrites the record of what actually ran:
+                # it is written to a NEW file under --rescore-output, with a manifest
+                # stamped at the current version. Without the flag, the run stays
+                # exploratory and the original sidecar is untouched.
+                if args.rescore_output:
+                    _persist_rescored(path, rows, args.rescore_output)
             summary = build_elaboration_scorecard(rows)
-            summary["artifact_provenance"] = (
-                "legacy exploratory rescore" if args.rescore
-                else "legacy exploratory" if manifest.get("legacy")
-                else "manifest-backed"
-            )
+            if args.rescore and manifest.get("legacy"):
+                provenance = "legacy re-derived (exploratory)"
+            elif args.rescore:
+                # Manifest-backed: the sidecar still records the original run, while
+                # these numbers were re-derived just now. Say so, or the report reads
+                # as though the artifact itself had been updated.
+                provenance = (
+                    f"re-derived from stored content under {BENCHMARK_VERSION}; "
+                    f"artifact recorded under {manifest.get('benchmark_version')}"
+                )
+            elif manifest.get("legacy"):
+                provenance = "legacy exploratory"
+            else:
+                provenance = "manifest-backed"
+            summary["artifact_provenance"] = provenance
             summaries.append(summary)
             if not args.json:
                 print(_pretty_report(path, summary, args.kind))

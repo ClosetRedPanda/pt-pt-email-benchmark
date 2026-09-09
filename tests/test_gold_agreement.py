@@ -119,18 +119,22 @@ def test_missing_dictionaries_fail_loudly(monkeypatch):
     assert "runner.py setup" in str(exc.value)
 
 
-def test_missing_spacy_model_fails_loudly(monkeypatch):
-    """A half-installed environment must not be reportable as a result.
+def test_spacy_absence_is_reported_not_fatal(monkeypatch):
+    """A missing spaCy model degrades the measurement; it must not brick the gate.
 
-    Without the pinned model the URL/email masking degrades and header
-    local-parts are read as dialect evidence, which moves precision on this
-    corpus from 100% to 58.33%. That is an environment state, not a finding
-    about the rule, so it has to be an error rather than a caveat.
+    CI installs the model via the hash-locked requirements, but a contributor
+    without it should still get a number -- labelled, with the degradation stated --
+    rather than a gate that cannot run at all.
     """
     monkeypatch.setattr(gold_agreement, "_spacy_available", lambda: False)
-    with pytest.raises(SystemExit) as exc:
-        gold_agreement.build_report()
-    assert gold_agreement.SPACY_MODEL_DISTRIBUTION in str(exc.value)
+    report = gold_agreement.build_report()
+    assert report["detector_engines"]["spacy_pipeline"] is False
+    # Engine state is part of the compared baseline, so a degraded run can never
+    # be mistaken for the recorded one.
+    assert "detector_engines" in gold_agreement._comparable(report)
+    assert gold_agreement._comparable(report) != gold_agreement._comparable(
+        json.loads(BASELINE.read_text(encoding="utf-8"))
+    )
 
 
 def test_baseline_binds_the_untracked_dictionaries():

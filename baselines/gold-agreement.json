@@ -33,6 +33,7 @@
   "detector_engines": {
     "euptvid_model": true,
     "hunspell_dictionaries": true,
+    "languagetool": false,
     "spacy_pipeline": true
   },
   "managed_resource_sha256": {

@@ -14,6 +14,7 @@ from runner import score_analysis
 from core.artifacts import ArtifactValidationError, build_manifest, load_manifest, validate_rows, write_manifest
 from compare import validate_comparison_artifacts, _json_comparison
 from core.statistics import paired_bootstrap
+from config import ELABORATION_PROMPTS, BENCHMARK_VERSION
 
 
 def test_reference_rows_validate():
@@ -656,6 +657,91 @@ def test_compare_requires_explicit_legacy_mode(tmp_path):
         raise AssertionError('legacy artifact was accepted without an explicit flag')
     metadata = validate_comparison_artifacts([result_path], kind='generation', allow_legacy=True)
     assert metadata[0]['legacy'] is True
+
+
+def test_rescore_bypasses_the_version_gate_but_only_with_recomputation(tmp_path):
+    """A stale-benchmark artifact must not be readable, but may be re-derived.
+
+    The gate exists because criteria verdicts are frozen into each row. Refusing it
+    outright, however, made `compare.py --rescore` unusable on exactly the artifacts
+    it was meant to repair -- every run predating a criteria retarget. So the
+    bypass is bound to the flag that actually recomputes those fields.
+    """
+    ids = [
+        str(item["id"])
+        for item in json.loads(ELABORATION_PROMPTS.read_text(encoding="utf-8")).get("prompts", [])
+    ]
+    result_path = tmp_path / "run.jsonl"
+    with result_path.open("w", encoding="utf-8") as handle:
+        for pid in ids:
+            handle.write(json.dumps({
+                "id": pid, "model": "model-a", "status": "success",
+                "content": "Boa tarde.", "instruction_adherence_pct": 50.0,
+                "semantic_preservation_pct": 50.0,
+            }) + "\n")
+    stale = build_manifest(
+        result_path, kind="generation",
+        benchmark_version="lean-0.0-definitely-stale", model="model-a",
+    )
+    write_manifest(result_path, stale)
+
+    try:
+        validate_comparison_artifacts([result_path], kind="generation", allow_legacy=True)
+    except ArtifactValidationError as exc:
+        assert "expected" in str(exc) and "--rescore" in str(exc)
+    else:
+        raise AssertionError("stale benchmark version was accepted without --rescore")
+
+    # With --rescore the caller has committed to recomputing every score, so the
+    # mismatch becomes a reported fact rather than a refusal.
+    manifests = validate_comparison_artifacts(
+        [result_path], kind="generation", allow_legacy=True, rescore=True,
+    )
+    assert manifests[0]["benchmark_version"] == "lean-0.0-definitely-stale"
+
+
+def test_rescore_recomputes_criteria_instead_of_reading_frozen_values(tmp_path):
+    """--rescore must refresh adherence, or it silently reports old criteria as new."""
+    from compare import _refresh_criteria_records
+
+    rows = [{
+        "id": "elab_pt_01", "model": "model-a", "status": "success",
+        "content": "Boa tarde, confirmamos o voucher de 15% para Rui Almeida na ordem PT-991.",
+        "instruction_adherence_pct": 99.0, "semantic_preservation_pct": 99.0,
+    }]
+    refreshed = _refresh_criteria_records(rows)
+    assert refreshed[0]["instruction_adherence_pct"] != 99.0, "frozen adherence was carried through"
+    assert rows[0]["instruction_adherence_pct"] == 99.0, "input rows must not be mutated"
+
+
+def test_rescore_output_never_overwrites_the_source_artifact(tmp_path):
+    """A re-derivation lands in a new file; the record of what ran stays intact."""
+    from compare import _persist_rescored
+
+    ids = [
+        str(item["id"])
+        for item in json.loads(ELABORATION_PROMPTS.read_text(encoding="utf-8")).get("prompts", [])
+    ]
+    rows = [{"id": pid, "model": "model-a", "status": "success", "content": "Boa tarde."} for pid in ids]
+    source = tmp_path / "run.jsonl"
+    source.write_text(
+        "\n".join(json.dumps({"id": pid, "model": "model-a", "status": "success", "content": "x"}) for pid in ids) + "\n",
+        encoding="utf-8",
+    )
+    before = source.read_bytes()
+    out_dir = tmp_path / "derived"
+    _persist_rescored(source, rows, out_dir)
+    assert source.read_bytes() == before, "source artifact was modified"
+    assert (out_dir / "run.jsonl").is_file()
+    stamped = json.loads((out_dir / "run.manifest.json").read_text(encoding="utf-8"))
+    assert stamped["benchmark_version"] == BENCHMARK_VERSION
+    assert stamped["parameters"]["criteria_refreshed"] is True
+    try:
+        _persist_rescored(source, rows, out_dir)
+    except ArtifactValidationError as exc:
+        assert "refusing to overwrite" in str(exc)
+    else:
+        raise AssertionError("re-derivation overwrote an existing artifact")
 
 
 def test_json_comparison_is_one_structured_document(tmp_path):

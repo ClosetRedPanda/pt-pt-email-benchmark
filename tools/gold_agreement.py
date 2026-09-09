@@ -125,6 +125,11 @@ def build_report() -> dict[str, Any]:
         "hunspell_dictionaries": bool(dictionaries_available),
         "euptvid_model": _euptvid_available(),
         "spacy_pipeline": _spacy_available(),
+        # Recorded, not required: `runner.py` scores submissions with
+        # use_languagetool=True while this gate measures with it False. Verified
+        # equivalent while LT cannot start (Java < 17 degrades to the same
+        # findings), but the baseline must not claim a configuration it did not run.
+        "languagetool": False,
     }
     # The dictionaries are the mechanism under test: without them the lexical
     # contrast path never runs and the rule degrades to its regex checks, which is
@@ -140,19 +145,7 @@ def build_report() -> dict[str, Any]:
             "graded. `python runner.py setup` fetches the files; `spylls` (in requirements.lock) loads "
             "them. Install the hash-locked environment, then re-run."
         )
-    if not engines["spacy_pipeline"]:
-        # Not pedantry: with the model absent, _mask_nonlexical_spans falls back to
-        # regex-only URI masking, `De:`/`Para:` address local-parts are read as
-        # prose and become lexical-contrast findings. On this corpus that added five
-        # false alarms from personal names and took precision from 100% to 58.33% --
-        # an environment state, not a judgement about the rule. Their own
-        # test_lexical_contrasts_mask_structured_nonlexical_spans covers the same rule.
-        raise SystemExit(
-            f"gold_agreement: the pinned spaCy model ({SPACY_MODEL_DISTRIBUTION}=={SPACY_MODEL_VERSION}) "
-            "is unavailable, so non-lexical masking degraded and header addresses are counted as dialect "
-            f"evidence. Install the locked model (`python -m spacy download {SPACY_MODEL_DISTRIBUTION}`) "
-            "and re-run."
-        )
+    spacy_degraded = not engines["spacy_pipeline"]
 
     per_row: list[dict[str, Any]] = []
     tp = fp = fn = tn = 0
@@ -376,6 +369,12 @@ def _summarise(report: dict[str, Any]) -> str:
             f"{r['nonleaking_rows']} non-leaking rows; all {report['suppression']['discarded_finding_count']} "
             f"findings were discarded by the capitalization rule. Precision without it: "
             f"{r['precision_without_suppression_pct']}% (vs {d['leakage_precision_pct']}% reported)"
+        )
+    if not report["detector_engines"]["spacy_pipeline"]:
+        lines.append(
+            "CAUTION: pinned spaCy model absent, so non-lexical masking is regex-only and header "
+            "address local-parts can be read as dialect evidence. Numbers here are NOT comparable "
+            "with a baseline recorded with the model installed."
         )
     if r["adversarial_european_rows_counted"] == 0:
         lines.append("WARNING: 0 non-leaking rows carry a both-dictionaries marker, so this set cannot "
