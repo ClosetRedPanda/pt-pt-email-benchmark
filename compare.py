@@ -61,6 +61,14 @@ LABELS = {
     "local_writing_quality_defect_only": "Writing quality (primary)",
     "local_writing_quality": "Writing quality (calibrated)",
     "wq_evaluator_version": "WQ evaluator version",
+    # Display gap: the scorecard computes these and the denominator block already
+    # lists them, but the pretty report never printed the value -- so a full
+    # denominator was shown for a metric whose number the reader could not see,
+    # and "N/A" (backend silent) was indistinguishable from a measured zero.
+    "avg_grammar_errors_per_email": "Grammar errors / email",
+    "avg_spelling_errors_per_email": "Spelling errors / email",
+    "structural_failures_pct": "Structural failures",
+    "repetition_pct": "Repetition",
     "latency_p50_ms": "Latency p50",
     "latency_p90_ms": "Latency p90",
     "latency_p95_ms": "Latency p95",
@@ -71,6 +79,17 @@ LABELS = {
     "unknown_cost_samples": "Unknown-cost samples",
     "cost_per_1k_emails_usd": "Cost / 1,000 emails",
 }
+
+# The metrics a reader is invited to rank models on. Kept in one place so the
+# resolution guard, the text report and the JSON document all describe the same
+# set -- a guard applied to a different list than the one printed is decoration.
+GENERATION_RANKING_KEYS = (
+    "instruction_adherence_pct", "semantic_preservation_pct",
+    "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct",
+    "ptbr_leakage_pct", "avg_grammar_errors_per_email",
+    "avg_spelling_errors_per_email", "structural_failures_pct", "repetition_pct",
+    "wf_score", "local_writing_quality_defect_only", "local_writing_quality",
+)
 
 
 def _format_value(key: str, value: Any) -> str:
@@ -92,6 +111,10 @@ def _format_value(key: str, value: Any) -> str:
         return f"${float(value):,.4f}"
     if key in ("unknown_cost_samples", "known_cost_samples"):
         return f"{int(value):,d}"
+    if key.endswith("_errors_per_email"):
+        # Two decimals: a sub-1 error rate is the whole point of these metrics,
+        # and one decimal would render 0.04 and 0.0 identically.
+        return f"{float(value):.2f}"
     return f"{float(value):.1f}" if isinstance(value, (int, float)) else str(value)
 
 
@@ -281,7 +304,40 @@ def _refresh_criteria_records(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return refreshed
 
 
-def _stamp_rescored_manifest(path: Path, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _rescored_prompt_provenance(source_manifest: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Resolve the system-prompt provenance a re-derivation is allowed to claim.
+
+    `runner.py` records `parameters.system_prompt_sha256` at run time, so a
+    manifest-backed artifact *does* carry the hash of the prompt its text was
+    generated under. A re-derivation must inherit that value, never hash the
+    prompt currently in `config.py`: the stored text is the only evidence of what
+    produced it, and it cannot be re-elicited. Hashing the live prompt instead
+    would assert an input condition that was never verified, inside the one
+    subsystem whose whole job is binding results to their actual inputs.
+    """
+    current_sha = sha256_bytes(SYSTEM_PROMPT_ELABORATION.encode("utf-8"))
+    recorded = (source_manifest or {}).get("parameters", {}).get("system_prompt_sha256")
+    if not isinstance(recorded, str) or not recorded:
+        return {
+            "system_prompt_sha256": None,
+            "system_prompt_provenance": "unrecorded",
+            "current_system_prompt_sha256": current_sha,
+        }
+    return {
+        "system_prompt_sha256": recorded,
+        "system_prompt_provenance": (
+            "inherited-from-run" if recorded == current_sha else "inherited-diverges-from-current-config"
+        ),
+        "current_system_prompt_sha256": current_sha,
+    }
+
+
+def _stamp_rescored_manifest(
+    path: Path,
+    rows: List[Dict[str, Any]],
+    *,
+    source_manifest: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Write a sidecar for a fully re-derived artifact, recording current versions.
 
     Honest only because every scoreable field is recomputed here: a rescored
@@ -324,18 +380,24 @@ def _stamp_rescored_manifest(path: Path, rows: List[Dict[str, Any]]) -> Dict[str
             "rescore": True,
             "criteria_refreshed": True,
             "source_artifact": path.name,
-            "system_prompt_sha256": sha256_bytes(SYSTEM_PROMPT_ELABORATION.encode("utf-8")),
+            **_rescored_prompt_provenance(source_manifest),
         },
     )
     write_manifest(path, manifest)
     return manifest
 
 
-def _persist_rescored(source: Path, rows: List[Dict[str, Any]], out_dir: Path) -> None:
+def _persist_rescored(
+    source: Path,
+    rows: List[Dict[str, Any]],
+    out_dir: Path,
+    *,
+    source_manifest: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Write re-derived rows and a manifest to a new artifact; never touch the source.
 
     Refuses if the destination exists, so a re-derivation cannot quietly replace
-    the record of the run it was derived from.
+    the record of the run it was derived from. Returns the stamped manifest.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     destination = out_dir / source.name
@@ -352,8 +414,9 @@ def _persist_rescored(source: Path, rows: List[Dict[str, Any]], out_dir: Path) -
         "\n".join(json.dumps(r, ensure_ascii=False, sort_keys=True) for r in rows) + "\n",
         encoding="utf-8",
     )
-    _stamp_rescored_manifest(destination, rows)
+    _stamp_rescored_manifest(destination, rows, source_manifest=source_manifest)
     print(f"[rescore] persisted re-derived artifact: {destination}", file=sys.stderr)
+    return destination
 
 
 def validate_comparison_artifacts(
@@ -457,6 +520,67 @@ def _constraint_profile() -> Dict[str, Any]:
     return profile
 
 
+_GOLD_BASELINE_PATH = Path(__file__).resolve().parent / "baselines" / "gold-agreement.json"
+
+
+def _detector_reliability_notes() -> List[str]:
+    """Surface the leakage detector's measured limitations inside the scorecard.
+
+    The compliance, leakage, graded-density and word-fidelity lines all read from
+    the same dictionary-contrast detector. `tools/gold_agreement.py` measures that
+    detector against the gold set and records the result in `baselines/
+    gold-agreement.json`, including that its headline precision depends on a single
+    suppression rule -- but that disclosure has never reached the report a reader
+    actually looks at, so a clean leakage number read as evidence rather than as a
+    floor. This is a display of already-frozen numbers, not a new judgement: it
+    fails soft (no note) if the baseline is missing, and cites the file so the
+    reader can check it.
+    """
+    try:
+        baseline = json.loads(_GOLD_BASELINE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    detector = baseline.get("detector") or {}
+    counts = baseline.get("counts") or {}
+    blindspot = baseline.get("blindspot") or {}
+    suppression = baseline.get("remediation_risk") or {}
+    recall = detector.get("leakage_recall_pct")
+    if not isinstance(recall, (int, float)):
+        return []
+    notes = [
+        "  Note: the dictionary-contrast detector behind compliance/leakage/word-fidelity",
+    ]
+    agreement = detector.get("agreement_pct")
+    notes.append(
+        f"        was measured on the frozen gold set: {agreement}% overall agreement,"
+        if isinstance(agreement, (int, float))
+        else "        was measured on the frozen gold set with no agreement rate recorded,"
+    )
+    fn = counts.get("false_negative")
+    invisible = blindspot.get("missed_rows_wholly_invisible_to_mechanism")
+    notes.append(
+        f"        recall {recall}% across {counts.get('true_positive', 0) + fn} gold leaks."
+        if isinstance(fn, int)
+        else f"        recall {recall}% of the gold-positive leaks."
+    )
+    if isinstance(invisible, int) and invisible:
+        notes.append(
+            f"        {invisible} of the misses cannot be represented by a dictionary difference at"
+        )
+        notes.append("        all, so they stay missed however the word lists grow.")
+    suppressed = suppression.get("precision_without_suppression_pct")
+    if isinstance(suppressed, (int, float)) and isinstance(detector.get("leakage_precision_pct"), (int, float)):
+        notes.append(
+            f"        Its {detector['leakage_precision_pct']}% precision rests on one capitalisation filter;"
+        )
+        notes.append(
+            f"        without it precision is {suppressed}%. A low leakage number is a floor, not proof"
+        )
+        notes.append("        of none -- and it is the same instrument scoring every model in this run.")
+    notes.append("        Source: baselines/gold-agreement.json.")
+    return notes
+
+
 def _generation_reading_notes(summary: Dict[str, Any]) -> List[str]:
     """Short 'how to read this' notes appended to generation reports.
 
@@ -503,6 +627,12 @@ def _generation_reading_notes(summary: Dict[str, Any]) -> List[str]:
         "  Note: tokens/s divides total tokens by whole-run wall clock and includes "
         "concurrency and queueing."
     )
+    # Only attach the detector caveat when a detector-backed line is on the page.
+    if any(
+        summary.get(key) is not None
+        for key in ("ptpt_compliance_pct", "ptbr_leakage_pct", "wf_score", "ptpt_compliance_graded_pct")
+    ):
+        notes.extend(_detector_reliability_notes())
     version = summary.get("wq_evaluator_version")
     if version:
         notes.append(f"  Note: writing-quality evaluator version: {version}")
@@ -529,6 +659,13 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
             "writing": {
                 "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
                 "local_writing_quality": summary.get("local_writing_quality"),
+                # These four are printed rather than only counted in the
+                # denominator block, so a measured zero and an unavailable
+                # measurement are visually distinct ("0.00" vs "N/A").
+                "avg_grammar_errors_per_email": summary.get("avg_grammar_errors_per_email"),
+                "avg_spelling_errors_per_email": summary.get("avg_spelling_errors_per_email"),
+                "structural_failures_pct": summary.get("structural_failures_pct"),
+                "repetition_pct": summary.get("repetition_pct"),
                 "wq_evaluator_version": summary.get("wq_evaluator_version"),
             },
             "performance": {
@@ -600,18 +737,150 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
     return "\n".join(lines)
 
 
+def _metric_separability(
+    summaries: List[Dict[str, Any]],
+    metric_keys: Iterable[str],
+) -> Dict[str, Any]:
+    """Flag metrics whose cross-model spread is at or below one quantisation unit.
+
+    With n=20 artifacts every binary per-email metric moves in exact 5.0-point
+    steps, so 90.0 vs 85.0 is one email, not a measured difference. A density
+    metric rounded to one decimal sits in the 99.8-99.9 band for every model at
+    realistic email lengths. Neither supports a conclusion; a metric identical
+    across models is not corroboration, it is an instrument that is not moving.
+    """
+    units = {
+        "instruction_adherence_pct": 100.0,
+        "semantic_preservation_pct": 100.0,
+        "ptpt_compliance_pct": 100.0,
+        "ptbr_leakage_pct": 100.0,
+        "structural_failures_pct": 100.0,
+        "repetition_pct": 100.0,
+        # REL-08: a leak-density metric, not a per-email rate. At ~150 words a
+        # single leak moves it ~0.7 points, so sub-point gaps cannot separate.
+        "wf_score": 100.0,
+        # Violation density rounded to one decimal in pt_dialect.py.
+        "ptpt_compliance_graded_pct": 100.0,
+        # A probability on 0..1, so the unit is a fraction, not a percentage.
+        "euptvid_probability": 1.0,
+        # Count per email, not a rate; one email contributes a non-integer count.
+        "avg_grammar_errors_per_email": 1.0,
+        "avg_spelling_errors_per_email": 1.0,
+    }
+    # `denominators` keys off the per-row field name for some metrics, so the
+    # lookup needs an explicit alias rather than a string mangle.
+    denom_keys = {
+        "local_writing_quality_defect_only": "local_writing_quality_defect_only",
+        "local_writing_quality": "local_writing_quality",
+    }
+    metrics: Dict[str, Any] = {}
+    for key in metric_keys:
+        lookup = denom_keys.get(key, key)
+        denom = None
+        for summary in summaries:
+            candidate = (summary.get("denominators") or {}).get(lookup)
+            if isinstance(candidate, int) and candidate > 0:
+                denom = candidate
+                break
+        values = sorted(
+            {
+                round(float(summary[key]), 6)
+                for summary in summaries
+                if isinstance(summary.get(key), (int, float)) and not isinstance(summary.get(key), bool)
+            }
+        )
+        unit = units.get(key, 100.0)
+        record: Dict[str, Any] = {
+            "values": values,
+            "n": denom,
+            "metric_unit": unit,
+            "min_gap": 0.0,
+            "quantisation_unit": (unit / denom) if denom else None,
+            "separable": False,
+            "reason": "",
+        }
+        if len(summaries) < 2:
+            record["reason"] = "fewer than two artifacts"
+        elif not values:
+            record["reason"] = "no artifact reports this metric"
+        elif len(values) == 1:
+            record["reason"] = "identical across every artifact"
+        else:
+            record["min_gap"] = values[-1] - values[0]
+            threshold = (unit / denom) if denom else unit
+            record["quantisation_unit"] = threshold
+            if record["min_gap"] > threshold:
+                record["separable"] = True
+                record["reason"] = "spread exceeds one quantisation unit"
+            else:
+                record["reason"] = "spread within one quantisation unit"
+        metrics[key] = record
+    return {
+        "artifact_count": len(summaries),
+        "rule": "a metric is not separable when max-min spread across models does not exceed one quantisation unit (1/n of the metric range)",
+        "metrics": metrics,
+    }
+
+
+def _separability_lines(separability: Dict[str, Any]) -> List[str]:
+    """Render the non-separable metrics for the text report."""
+    blocked = sorted(
+        key
+        for key, item in (separability.get("metrics") or {}).items()
+        if item.get("values") and item.get("reason") != "fewer than two artifacts"
+        and not item.get("separable")
+    )
+    if not blocked:
+        return []
+    lines = [
+        "",
+        "-" * 72,
+        f"  Resolution guard: {len(blocked)} of {len(separability.get('metrics') or {})} ranking metrics cannot",
+        "  separate these models -- their max-min spread is no larger than one",
+        "  quantisation unit (1 unit = the metric range divided by the sample size).",
+    ]
+    for key in blocked:
+        item = separability["metrics"][key]
+        unit = item.get("quantisation_unit")
+        state = "identical across all artifacts" if item["min_gap"] == 0.0 else "one quantisation unit"
+        lines.append(
+            f"    {LABELS.get(key, key):<28} spread {item['min_gap']:.2f}"
+            + (f"  (1 unit = {unit:.2f})" if isinstance(unit, (int, float)) else "")
+            + f"  [{state}]"
+        )
+    lines.append(
+        "  A flat or saturated metric is not corroboration. Read the paired bootstrap CI below."
+    )
+    return lines
+
+
 def _pairwise_uncertainty(paths: List[Path], *, repetitions: int = 4000) -> List[Dict[str, Any]]:
+    return _uncertainty_from_rows([read_jsonl(path) for path in paths], paths, repetitions=repetitions)
+
+
+def _uncertainty_from_rows(
+    row_sets: List[List[Dict[str, Any]]],
+    paths: List[Path],
+    *,
+    repetitions: int = 4000,
+) -> List[Dict[str, Any]]:
+    """Paired bootstrap over artifact rows.
+
+    Takes already-prepared row sets rather than paths because under --rescore the
+    rows that were scored are not the rows on disk. Reading the files here made
+    the confidence interval describe the frozen artifact while the report above it
+    described re-derived values -- the uncertainty and the number it qualifies
+    came from different measurements.
+    """
     reports = []
     for first_index in range(len(paths)):
         for second_index in range(first_index + 1, len(paths)):
-            first_path = paths[first_index]
-            second_path = paths[second_index]
             reports.append({
-                "first": first_path.name,
-                "second": second_path.name,
+                "first": paths[first_index].name,
+                "second": paths[second_index].name,
                 "statistics": paired_bootstrap(
-                    read_jsonl(first_path),
-                    read_jsonl(second_path),
+                    row_sets[first_index],
+                    row_sets[second_index],
                     repetitions=repetitions,
                 ),
             })
@@ -645,22 +914,24 @@ def _json_comparison(
     *,
     bootstrap_repetitions: int = 4000,
     include_uncertainty: bool = True,
+    row_sets: Optional[List[List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """Return one machine-readable document for all compared artifacts."""
+    # Under --rescore the scored rows are not the rows on disk; use whichever the
+    # caller supplied for every read in this function, not just for the bootstrap.
+    resolved_rows = row_sets if row_sets is not None else [read_jsonl(path) for path in paths]
     artifacts = []
-    for path, summary in zip(paths, summaries):
-        model_names = sorted({str(row["model"]) for row in read_jsonl(path) if row.get("model")})
+    for path, summary, artifact_rows in zip(paths, summaries, resolved_rows):
+        model_names = sorted({str(row["model"]) for row in artifact_rows if row.get("model")})
         artifacts.append({
             "artifact": path.name,
             "model": ", ".join(model_names) if model_names else "unknown model",
             "summary": summary,
         })
 
-    metric_keys = (
-        "instruction_adherence_pct", "semantic_preservation_pct",
-        "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct",
-        "ptbr_leakage_pct",
-        "wf_score", "local_writing_quality_defect_only", "local_writing_quality",
+    # Delta and separability share one key list so a number cannot appear in one
+    # and be silently absent from the other.
+    metric_keys = GENERATION_RANKING_KEYS + (
         "latency_p50_ms", "latency_p90_ms", "throughput_emails_per_min",
         "tokens_per_second", "cost_per_1k_emails_usd",
     )
@@ -680,9 +951,14 @@ def _json_comparison(
             "values": deltas,
         },
     }
+    if kind == "generation" and len(summaries) >= 2:
+        # Ranking metrics only: latency and cost are continuous measurements, and
+        # calling a 0.5 ms difference "below one quantisation unit" would bury the
+        # real failures under a guard that was never meant for them.
+        report["separability"] = _metric_separability(summaries, GENERATION_RANKING_KEYS)
     if include_uncertainty and kind == "generation" and len(paths) >= 2:
-        report["pairwise_uncertainty"] = _pairwise_uncertainty(
-            paths, repetitions=bootstrap_repetitions,
+        report["pairwise_uncertainty"] = _uncertainty_from_rows(
+            resolved_rows, paths, repetitions=bootstrap_repetitions,
         )
     return report
 
@@ -724,6 +1000,25 @@ def main() -> None:
         help="allow bare legacy JSONL artifacts for exploratory comparison",
     )
     args = parser.parse_args()
+    # A re-derivation is exactly the case that needs an interval: its point
+    # estimates are noisier than a normal run's because the content was produced
+    # under different criteria. Honouring --no-uncertainty there left only the
+    # bare numbers, which is how one-email differences came to be read as a
+    # ranking. The section is forced back on; --json callers still get what they
+    # asked for, since they can read the numbers programmatically.
+    if args.rescore and args.no_uncertainty and not args.json:
+        print(
+            "[notice] --rescore overrides --no-uncertainty: re-derived point estimates are "
+            "reported with their paired bootstrap interval.",
+            file=sys.stderr,
+        )
+        args.no_uncertainty = False
+    if args.rescore and not args.rescore_output:
+        print(
+            "[notice] reporting only: these numbers are re-derived, not run. To persist an "
+            "auditable artifact (with inherited prompt provenance) pass --rescore-output DIR.",
+            file=sys.stderr,
+        )
     manifests = validate_comparison_artifacts(
         args.results,
         kind=args.kind,
@@ -731,6 +1026,7 @@ def main() -> None:
         rescore=args.rescore,
     )
     summaries = []
+    scored_rows: List[List[Dict[str, Any]]] = []
     if args.kind == "generation":
         for path, manifest in zip(args.results, manifests):
             if manifest.get("legacy") and not args.rescore:
@@ -748,7 +1044,8 @@ def main() -> None:
                 # stamped at the current version. Without the flag, the run stays
                 # exploratory and the original sidecar is untouched.
                 if args.rescore_output:
-                    _persist_rescored(path, rows, args.rescore_output)
+                    _persist_rescored(path, rows, args.rescore_output, source_manifest=manifest)
+            scored_rows.append(rows)
             summary = build_elaboration_scorecard(rows)
             if args.rescore and manifest.get("legacy"):
                 provenance = "legacy re-derived (exploratory)"
@@ -776,14 +1073,25 @@ def main() -> None:
             summaries.append(summary)
             if not args.json:
                 print(_pretty_report(path, summary, args.kind))
-    if not args.json and not args.no_uncertainty and args.kind == "generation" and len(args.results) >= 2:
-        print(_pretty_uncertainty(_pairwise_uncertainty(args.results)))
+    if not args.json and args.kind == "generation" and len(summaries) >= 2:
+        # Printed once because it is a property of the *set*: whether these
+        # artifacts differ by more than one quantisation unit is not answerable
+        # per artifact.
+        print("\n".join(_separability_lines(_metric_separability(summaries, GENERATION_RANKING_KEYS))))
+        if not args.no_uncertainty:
+            print(
+                _pretty_uncertainty(
+                    _uncertainty_from_rows(scored_rows, args.results) if scored_rows
+                    else _pairwise_uncertainty(args.results)
+                )
+            )
     if args.json:
         print(json.dumps(
             _json_comparison(
                 args.results, summaries, args.kind,
                 bootstrap_repetitions=args.bootstrap_repetitions,
                 include_uncertainty=not args.no_uncertainty,
+                row_sets=scored_rows or None,
             ),
             ensure_ascii=False,
             sort_keys=True,
