@@ -17,6 +17,47 @@ This lean package deliberately makes fewer claims than the larger engineering ve
 - `compare.py` rejects missing manifests by default and rejects incompatible
 	manifest metadata before comparison.
 
+## Measured agreement of the leakage detector with the reference set
+`python tools/gold_agreement.py` scores `evaluate_pt_dialect` against the
+`reference_judgments` already present in `data/analysis_reference.jsonl`, and
+`baselines/gold-agreement.json` freezes the result. It is measurement only: no
+score on the ranking path changes, and the tool holds no vocabulary of its own.
+
+It refuses to report rather than report a meaningless number. It exits non-zero
+when the managed dictionaries are absent (the lexical-contrast path would not run
+at all) and when the pinned `pt_core_news_sm` model is absent (non-lexical masking
+would degrade). It also pins the SHA-256 of the two `.dic` files, which are
+gitignored, so a dictionary update that changes a both-dictionaries verdict forces
+a reviewed regeneration instead of passing as "same source, same numbers", and it
+records `detector_engines` so a baseline can never be compared against a
+differently-loaded detector.
+
+The recorded state of the world:
+
+- recall **66.67% (6/9)**, precision **100% (0 false alarms over 11 non-leaking
+  rows)**, overall agreement **85%**.
+- All three misses share one structural cause. Every marker the gold labels cites
+  for them exists in *both* PT-PT and PT-BR dictionaries, and a rule whose test is
+  "in one dictionary, not the other" cannot represent that case however its list
+  grows. The miss is not a missing word; it is a limit of the mechanism.
+- Headline precision depends on one heuristic, not on the detector being right.
+  The rule fired on 10 of the 11 non-leaking rows; the capital-first-letter
+  `score_eligible` rule discarded those findings. Without that rule precision is
+  37.5%.
+- This set cannot audit that heuristic. No non-leaking row carries a
+  both-dictionaries marker, so there is nothing in it for a European false alarm
+  to be found in. Absence of false positives here is not evidence of their absence.
+- The tool also refuses to measure a half-installed environment, which matters
+  because the failure is not obviously a failure: without the pinned
+  `pt_core_news_sm` model, `_mask_nonlexical_spans` falls back to regex-only URI
+  masking, `De:`/`Para:` address local-parts are read as prose, and this corpus
+  gains five false alarms from personal names (`sofia`, `teresa`, `miguel`,
+  `helena`, `pedro`), taking precision from 100% to 58.33%. That is the same rule
+  their own `test_lexical_contrasts_mask_structured_nonlexical_spans` guards.
+- EUPTVID agrees with gold on 90% (17/17 of the Portuguese rows) versus the rule's
+  85%. It is reported for reference and is **not** a drop-in replacement: the
+  roadmap forbids substituting its probability for compliance or WF.
+
 ## What is *not* claimed
 The included WQ human reference contains 50 verified rows, but it does not establish multi-rater inter-rater reliability. The benchmark therefore does **not** call the formal human WQ gate passed.
 

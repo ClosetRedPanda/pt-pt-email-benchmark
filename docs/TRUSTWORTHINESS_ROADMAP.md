@@ -296,6 +296,18 @@ Build a balanced expert-labeled test set containing:
 
 Measure false positives and false negatives before using the metric for ranking.
 
+Status: this measurement now exists. `python tools/gold_agreement.py` scores the
+lexical/structural rule against the `reference_judgments` in
+`data/analysis_reference.jsonl`, and `baselines/gold-agreement.json` freezes the
+result as a CI gate. The 20 reference rows are the only labelled set available, so
+they currently serve as both the diagnostic corpus and the grading corpus — growing
+a separate held-out set is still outstanding, and remains a prerequisite for using
+this metric in ranking. Recorded state, on a complete environment (managed dictionaries plus the pinned
+spaCy model, both of which the tool now requires): recall 66.67%, precision 100%
+(carried by the `score_eligible` suppression heuristic; 37.5% without it), and
+three misses whose markers are present in both dictionaries and therefore
+unrepresentable by a dictionary difference.
+
 The EUPTVID probability is a classifier output, not a calibrated probability
 of perfect PT-PT writing. A high EUPTVID value cannot cancel a detected PT-BR
 lexical or grammatical violation.

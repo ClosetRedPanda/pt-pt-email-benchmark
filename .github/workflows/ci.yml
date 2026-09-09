@@ -45,5 +45,8 @@ jobs:
           python tools/run_smoke_baseline.py --output baselines/smoke-baseline.json
           git diff --exit-code -- baselines/smoke-baseline.json
 
+      - name: Report detector agreement with the gold labels
+        run: python tools/gold_agreement.py --check-baseline baselines/gold-agreement.json
+
       - name: Run unit tests
         run: python -m pytest -q

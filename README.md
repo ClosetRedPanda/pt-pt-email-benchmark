@@ -73,7 +73,15 @@ python -m pip install --require-hashes -r requirements.lock
 # Fetch revision-pinned, SHA-256-verified EUPTVID and Hunspell resources:
 python runner.py setup
 python runner.py validate
+# Compare the leakage detector against the labelled reference set:
+python tools/gold_agreement.py --check-baseline baselines/gold-agreement.json
 ```
+
+`gold_agreement.py` is measurement only: it changes no score on the ranking path.
+It reports how far the hand-written rule agrees with the 20 rows of
+`data/analysis_reference.jsonl`, and `baselines/gold-agreement.json` freezes that
+result so CI fails if recall, precision, or the recorded blindspot moves. See
+`docs/VALIDATION.md` for what those numbers do and do not support.
 
 `python runner.py setup` downloads external evaluator resources that are not committed,
 pinned to an exact upstream revision and verified by SHA-256. See `models/README.md` and `docs/LICENSE-THIRD-PARTY.md`. Re-run it any time; it is a no-op when everything is already

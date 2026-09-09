@@ -2,6 +2,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import sys
 from pathlib import Path
 from config import ANALYSIS_REFERENCE, ELABORATION_CONSTRAINTS, ELABORATION_PROMPTS, DATA_DIR
 from core.generation_evaluator import load_constraint_map
@@ -43,6 +44,21 @@ def run_validation() -> None:
     assert "ptpt_compliance_pct" in dialect and "wf_score" in wf
     wq = evaluate_writing_quality(pt, language="pt-PT", use_languagetool=False)
     assert "writing_quality_score" in wq
+    # Agreement of the leakage detector with the labelled reference set. This is a
+    # measurement of the rule, not of a submission: a mismatch means the detector
+    # changed and its recorded accuracy/blindspot no longer describes it.
+    tool = root / "tools" / "gold_agreement.py"
+    assert tool.is_file(), "tools/gold_agreement.py is missing from the source inventory"
+    if str(tool.parent) not in sys.path:
+        sys.path.insert(0, str(tool.parent))
+    import gold_agreement  # noqa: PLC0415
+
+    baseline = root / "baselines" / "gold-agreement.json"
+    assert baseline.is_file(), "baselines/gold-agreement.json is missing: regenerate with gold_agreement.py --output"
+    expected = json.loads(baseline.read_text(encoding="utf-8"))
+    assert gold_agreement._comparable(gold_agreement.build_report()) == gold_agreement._comparable(expected), (
+        "detector no longer agrees with gold as recorded in baselines/gold-agreement.json"
+    )
     print(f"PASS: {len(rows)} analysis references, {len(constraints)} generation constraint sets, deterministic core smoke tests")
     print("NOTE: formal multi-rater WQ validation is not claimed; see docs/VALIDATION.md")
 

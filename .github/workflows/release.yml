@@ -30,6 +30,7 @@ jobs:
           git ls-files | LC_ALL=C sort | diff -u MANIFEST.txt -
           python runner.py setup
           python runner.py validate
+          python tools/gold_agreement.py --check-baseline baselines/gold-agreement.json
           python -m pytest -q
           python tools/run_smoke_baseline.py --output baselines/smoke-baseline.json
           git diff --exit-code -- baselines/smoke-baseline.json

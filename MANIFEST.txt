@@ -10,6 +10,7 @@ LICENSE
 MANIFEST.txt
 README.md
 baselines/README.md
+baselines/gold-agreement.json
 baselines/smoke-baseline.json
 compare.py
 config.py
@@ -52,8 +53,10 @@ requirements.lock
 requirements.txt
 runner.py
 tests/test_core.py
+tests/test_gold_agreement.py
 tests/test_package_integrity.py
 tools/apply_human_wq_review.py
+tools/gold_agreement.py
 tools/prepare_wq_rater_overlap.py
 tools/rescore_artifact.py
 tools/review_wq_calibration.py

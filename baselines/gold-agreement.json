@@ -1,0 +1,397 @@
+{
+  "baseline_id": "gold-agreement-v1",
+  "benchmark_version": "lean-1.0",
+  "blindspot": {
+    "missed_rows_wholly_invisible_to_mechanism": 3,
+    "note": "'invisible to mechanism' means every token of the gold marker exists in BOTH managed dictionaries, so a detector built on their difference cannot represent it at all. This is a property of the method, not a coverage gap that more words can close."
+  },
+  "changes_any_score": false,
+  "classifier_decision_threshold": 0.5,
+  "classifier_reference": {
+    "false_negative": 2,
+    "false_positive": 0,
+    "leakage_precision_pct": 100.0,
+    "leakage_recall_pct": 77.78,
+    "note": "EUPTVID is reported as a contrast, NOT as a drop-in replacement; see docs/TRUSTWORTHINESS_ROADMAP.md 'Never use EUPTVID probability as a substitute for compliance or WF'.",
+    "true_negative": 8,
+    "true_positive": 7
+  },
+  "counts": {
+    "false_negative": 3,
+    "false_positive": 0,
+    "nonleaking_rows": 11,
+    "rows": 20,
+    "rows_with_gold": 20,
+    "true_negative": 11,
+    "true_positive": 6
+  },
+  "detector": {
+    "agreement_pct": 85.0,
+    "leakage_precision_pct": 100.0,
+    "leakage_recall_pct": 66.67
+  },
+  "detector_engines": {
+    "euptvid_model": true,
+    "hunspell_dictionaries": true,
+    "spacy_pipeline": true
+  },
+  "managed_resource_sha256": {
+    "docs/pt_BR.dic": "a38bfb26b68ece2834e79fe83e48d5792652970ace12db89d1b9674bf9933183",
+    "docs/pt_PT.dic": "e29ba2d7aa8a2ad43e9cb46ac6473064b661545c87002aea90e18899d98d3cc9"
+  },
+  "measurement_only": true,
+  "misses": [
+    {
+      "gold_markers": [
+        "equipe",
+        "celular",
+        "nota fiscal",
+        "tela",
+        "Atenciosamente",
+        "vocês me enviem"
+      ],
+      "id": "calib_ptbr_001",
+      "marker_diagnostics": [
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "equipe",
+          "representable_by_set_difference": false
+        },
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "celular",
+          "representable_by_set_difference": false
+        },
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "nota fiscal",
+          "representable_by_set_difference": false
+        },
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "tela",
+          "representable_by_set_difference": false
+        },
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "Atenciosamente",
+          "representable_by_set_difference": false
+        },
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "vocês me enviem",
+          "representable_by_set_difference": false
+        }
+      ],
+      "markers_invisible_to_mechanism": 6,
+      "markers_total": 6
+    },
+    {
+      "gold_markers": [
+        "usuário"
+      ],
+      "id": "calib_mixed_001",
+      "marker_diagnostics": [
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "usuário",
+          "representable_by_set_difference": false
+        }
+      ],
+      "markers_invisible_to_mechanism": 1,
+      "markers_total": 1
+    },
+    {
+      "gold_markers": [
+        "Atenciosamente"
+      ],
+      "id": "calib_mixed_003_signoff_leak",
+      "marker_diagnostics": [
+        {
+          "every_token_in_both_dictionaries": true,
+          "marker": "Atenciosamente",
+          "representable_by_set_difference": false
+        }
+      ],
+      "markers_invisible_to_mechanism": 1,
+      "markers_total": 1
+    }
+  ],
+  "per_row": [
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9998,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_001",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9999,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_002",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 1.0,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_003",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9999,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_004",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 1.0,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_005",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9996,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_006",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9999,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_ptpt_007",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": false,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.015,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_001",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": true,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.0048,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_002",
+      "ptpt_compliance_graded_pct": 88.2,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": true,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.0378,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_003",
+      "ptpt_compliance_graded_pct": 95.4,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": true,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.0132,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_004_banking",
+      "ptpt_compliance_graded_pct": 98.0,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": true,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.0337,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_005_gerund",
+      "ptpt_compliance_graded_pct": 86.4,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": true,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.1287,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_006_proclisis",
+      "ptpt_compliance_graded_pct": 97.6,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": true,
+      "euptvid_label": "PT-BR",
+      "euptvid_prob_ptpt": 0.0364,
+      "expected_euptvid_label": "PT-BR",
+      "gold_dialect": "PT-BR",
+      "gold_ptbr_leakage": true,
+      "id": "calib_ptbr_007_ter_haver",
+      "ptpt_compliance_graded_pct": 95.7,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": false,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9999,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "MIXED",
+      "gold_ptbr_leakage": true,
+      "id": "calib_mixed_001",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9892,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "PT-PT",
+      "gold_ptbr_leakage": false,
+      "id": "calib_mixed_002_loanwords",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": false,
+      "detector_leakage_detected": false,
+      "euptvid_label": "PT-PT",
+      "euptvid_prob_ptpt": 0.9999,
+      "expected_euptvid_label": "PT-PT",
+      "gold_dialect": "MIXED",
+      "gold_ptbr_leakage": true,
+      "id": "calib_mixed_003_signoff_leak",
+      "ptpt_compliance_graded_pct": 100.0,
+      "ptpt_compliance_pct": 100.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "EN",
+      "euptvid_prob_ptpt": null,
+      "expected_euptvid_label": "EN",
+      "gold_dialect": "EN",
+      "gold_ptbr_leakage": false,
+      "id": "calib_en_001",
+      "ptpt_compliance_graded_pct": 0.0,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "EN",
+      "euptvid_prob_ptpt": null,
+      "expected_euptvid_label": "EN",
+      "gold_dialect": "EN",
+      "gold_ptbr_leakage": false,
+      "id": "calib_en_002",
+      "ptpt_compliance_graded_pct": 0.0,
+      "ptpt_compliance_pct": 0.0
+    },
+    {
+      "agrees": true,
+      "detector_leakage_detected": false,
+      "euptvid_label": "EN",
+      "euptvid_prob_ptpt": null,
+      "expected_euptvid_label": "EN",
+      "gold_dialect": "EN",
+      "gold_ptbr_leakage": false,
+      "id": "calib_en_003_poor_quality",
+      "ptpt_compliance_graded_pct": 0.0,
+      "ptpt_compliance_pct": 0.0
+    }
+  ],
+  "remediation_risk": {
+    "adversarial_european_rows_counted": 0,
+    "gold_rows_are_also_the_diagnostic_set": true,
+    "nonleaking_rows": 11,
+    "nonleaking_rows_where_rule_fired": 10,
+    "nonleaking_rows_where_rule_scored": 0,
+    "note": "Do not close a miss by adding that miss's own gold markers to a list: the detector would then be tuned on the rows used to grade it. Grow a held-out set instead (docs/TRUSTWORTHINESS_ROADMAP.md: 'Keep a frozen test set separate from development and calibration data').",
+    "precision_warning": "headline precision is carried by the suppression heuristic, not by the detector: the rule fired on 10/11 non-leaking rows and only the capital-first-letter rule kept them from becoming false alarms. Precision without that one rule is reported alongside so the dependency is visible.",
+    "precision_without_suppression_pct": 37.5
+  },
+  "resource_note": "managed dictionaries loaded (gitignored; see runner.py setup)",
+  "source_sha256": {
+    "core/pt_dialect.py": "4bbe3566f0bdbdf4c747551b34dbfbcce579268d73d97cbbddb0b87eafde7698",
+    "core/wf_fidelity.py": "90847633bd48df3d0b0b4edfe0d8a32a87ccad53fef0b795545f86d3ddfddb2f",
+    "data/analysis_reference.jsonl": "413580dcb9a1dc0074291dc73bee8c41785d52163308e4792849887ce24199fb"
+  },
+  "suppression": {
+    "discarded_finding_count": 15,
+    "discarded_finding_examples": [
+      "Exmo",
+      "Exmos",
+      "Ferreira",
+      "From: billing@softwarevendor.com\nTo: acc",
+      "From: david.miller@enterprise.com\nTo: su",
+      "From: user123@badformat.com\nTo: support@",
+      "Helena",
+      "Manuel",
+      "Miguel",
+      "Pedro",
+      "Sofia",
+      "Teresa",
+      "Vasco"
+    ],
+    "note": "findings the rule produced on non-leaking text and then dropped because score_eligible was false. Inspect these before concluding the rule is conservative: they are what it actually matches, kept out of the score by one capitalization heuristic."
+  }
+}
