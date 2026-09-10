@@ -346,7 +346,8 @@ def test_ranking_key_list_covers_every_printed_generation_metric():
     printed = {
         "instruction_adherence_pct", "semantic_preservation_pct",
         "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct",
-        "ptbr_leakage_pct", "wf_score",
+        "ptbr_leakage_pct", "avg_ptbr_violations_per_email",
+        "wf_score", "avg_wf_penalty_per_email",
         "avg_grammar_errors_per_email", "avg_spelling_errors_per_email",
         "structural_failures_pct", "repetition_pct",
         "local_writing_quality_defect_only", "local_writing_quality",

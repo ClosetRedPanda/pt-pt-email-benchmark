@@ -150,6 +150,31 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
     comp = [float(r["ptpt_compliance_pct"]) for r in ptpt if r.get("ptpt_compliance_pct") is not None]
     comp_graded = [float(r["ptpt_compliance_graded_pct"]) for r in ptpt if r.get("ptpt_compliance_graded_pct") is not None]
     leakage_flags = [r.get("ptbr_leakage_detected") for r in ptpt if isinstance(r.get("ptbr_leakage_detected"), bool)]
+    # A word-density metric (graded compliance, word fidelity) compresses one
+    # violation in a ~150-word email to ~0.7-1.0 points, so it reads ~99 for
+    # every model even when whole emails leak PT-BR. The tangible companion is
+    # the mean count of validated PT-BR violations per PT-PT email, read from
+    # the per-row dialect result (the runner and rescorer both persist it).
+    ptbr_violation_counts = []
+    for r in ptpt:
+        dialect = r.get("dialect_evaluation")
+        count = (dialect.get("ptbr_violation_count") if isinstance(dialect, dict) else None)
+        if count is None:
+            count = r.get("ptbr_violation_count")
+        if isinstance(count, int) and count >= 0:
+            ptbr_violation_counts.append(count)
+    # Word fidelity is a leak *density*, so a length-normalized companion would
+    # just be `100 - wf_score` rescaled and add no information. The tangible
+    # companion is the *absolute* weighted leak penalty per email (`wf_evaluation`
+    # persists `weighted_leaks`, the sum of tier weights before division by
+    # words): it grows with the number/severity of leaks and does not shrink in a
+    # longer email, so it is the burden measure to read alongside `wf_score`.
+    wf_penalties = []
+    for r in ptpt:
+        wfe = r.get("wf_evaluation")
+        leaks = (wfe.get("weighted_leaks") if isinstance(wfe, dict) else None)
+        if isinstance(leaks, (int, float)):
+            wf_penalties.append(float(leaks))
 
     adh = [r.get("instruction_adherence_pct") for r in successful if r.get("instruction_adherence_pct") is not None]
     sem = [r.get("semantic_preservation_pct") for r in successful if r.get("semantic_preservation_pct") is not None]
@@ -211,7 +236,9 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
         "ptpt_compliance_pct": mean_or_none(comp),
         "ptpt_compliance_graded_pct": mean_or_none(comp_graded),
         "ptbr_leakage_pct": (sum(bool(v) for v in leakage_flags) / len(leakage_flags) * 100.0) if leakage_flags else None,
+        "avg_ptbr_violations_per_email": mean_or_none(ptbr_violation_counts),
         "wf_score": mean_or_none(wf_vals),
+        "avg_wf_penalty_per_email": mean_or_none(wf_penalties),
         "local_writing_quality_defect_only": mean_or_none(wq_defect_only),
         "local_writing_quality": mean_or_none(wq),
         "languagetool_available": grammar_checked,
@@ -241,7 +268,9 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
             "ptpt_compliance_pct": len(comp),
             "ptpt_compliance_graded_pct": len(comp_graded),
             "ptbr_leakage_pct": len(leakage_flags),
+            "avg_ptbr_violations_per_email": len(ptbr_violation_counts),
             "wf_score": len(wf_vals),
+            "avg_wf_penalty_per_email": len(wf_penalties),
             "local_writing_quality_defect_only": len(wq_defect_only),
             "local_writing_quality": len(wq),
             "grammar_errors_per_email": len(grammar),
@@ -258,7 +287,9 @@ def build_elaboration_scorecard(records: List[Dict[str, Any]]) -> Dict[str, Any]
                 "euptvid_probability": len(euptvid),
                 "ptpt_compliance_pct": len(comp),
                 "ptbr_leakage_pct": len(leakage_flags),
+                "avg_ptbr_violations_per_email": len(ptbr_violation_counts),
                 "wf_score": len(wf_vals),
+                "avg_wf_penalty_per_email": len(wf_penalties),
                 "local_writing_quality": len(wq),
                 "local_writing_quality_defect_only": len(wq_defect_only),
                 "grammar_errors_per_email": len(grammar),
@@ -286,7 +317,9 @@ def format_scorecard(summary: Dict[str, Any]) -> Dict[str, Any]:
             "ptpt_compliance_pct": summary.get("ptpt_compliance_pct"),
             "ptpt_compliance_graded_pct": summary.get("ptpt_compliance_graded_pct"),
             "ptbr_leakage_pct": summary.get("ptbr_leakage_pct"),
+            "avg_ptbr_violations_per_email": summary.get("avg_ptbr_violations_per_email"),
             "wf_score": summary.get("wf_score"),
+            "avg_wf_penalty_per_email": summary.get("avg_wf_penalty_per_email"),
         },
         "writing": {
             "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),

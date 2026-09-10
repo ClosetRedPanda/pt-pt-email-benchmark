@@ -101,22 +101,47 @@ def _get_checker(language: str) -> Tuple[Any, threading.Lock]:
         return checker, lock
 
 
-def _value(obj: Any, *names: str, default: Any = None) -> Any:
-    if isinstance(obj, dict):
+def _match_field(match: Any, *names: str, default: Any = None) -> Any:
+    """Read a field from a LanguageTool match, whatever wrapper shape it has.
+
+    ``language_tool_python`` >= 3.4 returns ``Match`` *objects* whose attributes
+    are snake_case (``rule_issue_type``, ``category`` as a plain string id,
+    ``replacements`` as a list of strings). Older wrappers / raw JSON return
+    dicts with camelCase keys (``ruleIssueType``, ``category`` as a dict with an
+    ``id``, ``replacements`` as a list of ``{"value": ...}`` dicts). Checking only
+    one spelling silently returned ``""`` for every match, which pushed every
+    LanguageTool finding into the ``style`` dimension and zeroed grammar/spelling
+    counts (and crippled dialect filtering via the category id).
+    """
+    if isinstance(match, dict):
         for name in names:
-            if name in obj:
-                return obj[name]
+            if name in match:
+                return match[name]
+        return default
     for name in names:
-        if hasattr(obj, name):
-            return getattr(obj, name)
+        value = getattr(match, name, None)
+        if value is not None:
+            return value
     return default
 
 
+def _category_id(category: Any) -> str:
+    """Normalize the match category to its string id (handles both shapes)."""
+    if isinstance(category, dict):
+        return str(category.get("id", "") or "")
+    return str(category or "")
+
+
 def _replacements(match: Any) -> List[str]:
-    raw = _value(match, "replacements", default=[]) or []
+    raw = _match_field(match, "replacements", default=[]) or []
     out: List[str] = []
     for item in raw:
-        value = _value(item, "value", default=None)
+        if isinstance(item, str):
+            value = item
+        elif isinstance(item, dict):
+            value = item.get("value")
+        else:
+            value = _match_field(item, "value", default=None)
         if value:
             out.append(str(value))
     return out[:5]
@@ -154,13 +179,29 @@ def check_local_languagetool(
 
     issues: List[Dict[str, Any]] = []
     for match in matches:
-        rule_id = str(_value(match, "ruleId", "rule_id", default="") or "")
-        message = str(_value(match, "message", default="") or "")
-        category_obj = _value(match, "category", default=None)
-        category_id = str(_value(category_obj, "id", default="") or "")
-        issue_type = str(_value(match, "ruleIssueType", "issueType", "issue_type", default="") or "").lower()
-        rule_desc = str(_value(match, "ruleDescription", "description", default="") or "")
-        context = str(_value(match, "context", default="") or "").strip()
+        # Raw JSON nests rule metadata under ``rule``; the flattened object shape
+        # hoists it to snake_case attributes. Resolve both so the filter works
+        # identically whichever wrapper produced the match.
+        nested_rule = match.get("rule") if isinstance(match, dict) else None
+        if not isinstance(nested_rule, dict):
+            nested_rule = {}
+        rule_id = str(_match_field(match, "ruleId", "rule_id", default="") or nested_rule.get("id") or "")
+        message = str(_match_field(match, "message", default="") or "")
+        category_id = _category_id(
+            _match_field(match, "category", default=None) or nested_rule.get("category")
+        )
+        issue_type = str(
+            _match_field(match, "ruleIssueType", "rule_issue_type", "issueType", default="")
+            or nested_rule.get("issueType")
+            or ""
+        ).lower()
+        rule_desc = str(
+            _match_field(match, "ruleDescription", "description", default="")
+            or nested_rule.get("description")
+            or ""
+        )
+        context_raw = _match_field(match, "context", default="") or ""
+        context = (str(context_raw.get("text")) if isinstance(context_raw, dict) else str(context_raw)).strip()
 
         # Some language_tool_python versions expose category/rule metadata via
         # nested objects/dicts; keep the filter compatible with both forms.

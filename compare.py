@@ -48,13 +48,19 @@ LABELS = {
     "entity_f1": "Entity F1",
     "instruction_adherence_pct": "Instruction adherence",
     "semantic_preservation_pct": "Semantic preservation",
-    "euptvid_probability": "EUPTVID probability",
-    "ptpt_compliance_pct": "PT-PT compliance",
+    "euptvid_probability": "EUPTVID prob. (classifier)",
+    "ptpt_compliance_pct": "PT-PT compliance (0-leak)",
     "ptpt_compliance_graded_pct": "PT-PT compliance (graded)",
-    "ptbr_leakage_pct": "PT-BR leakage",
+    "ptbr_leakage_pct": "PT-BR leakage (emails)",
     # REL-08: word fidelity is a leak *density* (weighted penalties divided by
     # total words), so the label must not read like a percentage of clean mail.
     "wf_score": "Word fidelity (density)",
+    # Tangible companions to the density metrics above: a count per email and a
+    # penalty per 100 words, so one leak cannot hide behind a ~99 density score.
+    "avg_ptbr_violations_per_email": "PT-BR violations / email",
+    # Absolute weighted leak burden per email (NOT `100 - wf_score` rescaled):
+    # grows with leak count/severity and does not shrink in a longer email.
+    "avg_wf_penalty_per_email": "WF penalty / email",
     # Issue 3: the defect-only score is the primary writing-quality metric for
     # model comparison; the calibrated score is the conservative headline.
     "local_writing_quality_defect_only": "Writing quality (primary)",
@@ -85,9 +91,11 @@ LABELS = {
 GENERATION_RANKING_KEYS = (
     "instruction_adherence_pct", "semantic_preservation_pct",
     "euptvid_probability", "ptpt_compliance_pct", "ptpt_compliance_graded_pct",
-    "ptbr_leakage_pct", "avg_grammar_errors_per_email",
+    "ptbr_leakage_pct", "avg_ptbr_violations_per_email",
+    "avg_grammar_errors_per_email",
     "avg_spelling_errors_per_email", "structural_failures_pct", "repetition_pct",
-    "wf_score", "local_writing_quality_defect_only", "local_writing_quality",
+    "wf_score", "avg_wf_penalty_per_email",
+    "local_writing_quality_defect_only", "local_writing_quality",
 )
 
 
@@ -113,6 +121,13 @@ def _format_value(key: str, value: Any) -> str:
     if key.endswith("_errors_per_email"):
         # Two decimals: a sub-1 error rate is the whole point of these metrics,
         # and one decimal would render 0.04 and 0.0 identically.
+        return f"{float(value):.2f}"
+    if key == "avg_ptbr_violations_per_email":
+        # Count per email; two decimals for the same sub-1 reason as above.
+        return f"{float(value):.2f}"
+    if key == "avg_wf_penalty_per_email":
+        # Absolute weighted leak penalty per email; two decimals for the same
+        # sub-1 reason as the other count-per-email metrics.
         return f"{float(value):.2f}"
     return f"{float(value):.1f}" if isinstance(value, (int, float)) else str(value)
 
@@ -617,14 +632,19 @@ def _generation_reading_notes(summary: Dict[str, Any]) -> List[str]:
         "the email); the"
     )
     notes.append(
-        "        graded line above reports violation density as a percentage."
+        "        graded line above is violation density as a percentage, so read it with "
+        "'PT-BR violations / email'."
     )
     notes.append(
-        "  Note: word fidelity is leak density (weighted penalties / words); one leak costs "
-        "less in a longer"
+        "  Note: word fidelity is leak density (weighted penalties / words), so one leak "
+        "costs less in a"
     )
     notes.append(
-        "        email, so compare it across runs only at similar lengths."
+        "        longer email; read it with 'WF penalty / email', the absolute leak burden "
+        "that does not"
+    )
+    notes.append(
+        "        shrink with length."
     )
     notes.append(
         "  Note: tokens/s divides total tokens by whole-run wall clock and includes "
@@ -657,7 +677,9 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str, *, quiet: boo
                 "ptpt_compliance_pct": summary.get("ptpt_compliance_pct"),
                 "ptpt_compliance_graded_pct": summary.get("ptpt_compliance_graded_pct"),
                 "ptbr_leakage_pct": summary.get("ptbr_leakage_pct"),
+                "avg_ptbr_violations_per_email": summary.get("avg_ptbr_violations_per_email"),
                 "wf_score": summary.get("wf_score"),
+                "avg_wf_penalty_per_email": summary.get("avg_wf_penalty_per_email"),
             },
             "writing": {
                 "local_writing_quality_defect_only": summary.get("local_writing_quality_defect_only"),
@@ -772,6 +794,9 @@ def _metric_separability(
         # Count per email, not a rate; one email contributes a non-integer count.
         "avg_grammar_errors_per_email": 1.0,
         "avg_spelling_errors_per_email": 1.0,
+        "avg_ptbr_violations_per_email": 1.0,
+        # Absolute weighted leak penalty per email; one tier-1 weight is the unit.
+        "avg_wf_penalty_per_email": 1.0,
     }
     # The scorecard's denominator dict keys a few metrics under names that
     # differ from the summary field (grammar/spelling counts carry an `avg_`
