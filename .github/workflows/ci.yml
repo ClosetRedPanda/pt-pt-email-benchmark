@@ -23,7 +23,18 @@ jobs:
 
       - name: Install system dependencies (JRE for LanguageTool)
         run: |
-          sudo apt-get update
+          # The runner image ships third-party apt sources (Chrome, Microsoft)
+          # that this benchmark never needs. A flaky third-party index (e.g.
+          # dl.google.com serving a stale Packages file) must not be able to
+          # fail `apt-get update`, so drop those lists and refresh the cache
+          # before installing from the Ubuntu archive.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list \
+                     /etc/apt/sources.list.d/microsoft-*.list
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3 4 5; do
+            echo "apt-get update attempt ${attempt}/5"
+            sudo apt-get update && break || sleep 10
+          done
           sudo apt-get install -y --no-install-recommends build-essential default-jre
 
       - name: Install hash-locked Python environment

@@ -30,7 +30,6 @@ these rows as development evidence.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -41,9 +40,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import ANALYSIS_REFERENCE, BENCHMARK_VERSION  # noqa: E402
+from core._util import sha256_file  # noqa: E402
 from core.pt_dialect import (  # noqa: E402
-    SPACY_MODEL_DISTRIBUTION,
-    SPACY_MODEL_VERSION,
     evaluate_pt_dialect,
     get_ptbr_dictionary,
     get_ptpt_dictionary,
@@ -67,10 +65,6 @@ MANAGED_RESOURCES = (
     "docs/pt_PT.dic",
     "docs/pt_BR.dic",
 )
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _visible_to_difference(marker: str, ptpt: Any, ptbr: Any) -> dict[str, bool]:
@@ -145,7 +139,6 @@ def build_report() -> dict[str, Any]:
             "graded. `python runner.py setup` fetches the files; `spylls` (in requirements.lock) loads "
             "them. Install the hash-locked environment, then re-run."
         )
-    spacy_degraded = not engines["spacy_pipeline"]
 
     per_row: list[dict[str, Any]] = []
     tp = fp = fn = tn = 0
@@ -319,8 +312,8 @@ def build_report() -> dict[str, Any]:
                 "one rule is reported alongside so the dependency is visible."
             ),
         },
-        "source_sha256": {p: _sha256(ROOT / p) for p in DETECTOR_SOURCES},
-        "managed_resource_sha256": {p: _sha256(ROOT / p) for p in MANAGED_RESOURCES
+        "source_sha256": {p: sha256_file(ROOT / p) for p in DETECTOR_SOURCES},
+        "managed_resource_sha256": {p: sha256_file(ROOT / p) for p in MANAGED_RESOURCES
                                       if (ROOT / p).is_file()},
         "detector_engines": engines,
         "per_row": per_row,

@@ -19,7 +19,16 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential
+      - name: Install system dependencies
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list \
+                     /etc/apt/sources.list.d/microsoft-*.list
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3 4 5; do
+            echo "apt-get update attempt ${attempt}/5"
+            sudo apt-get update && break || sleep 10
+          done
+          sudo apt-get install -y --no-install-recommends build-essential
       - run: python -m pip install --require-hashes -r requirements.lock
       - run: python tools/run_smoke_baseline.py --output baselines/smoke-baseline.json
       - run: git diff --exit-code -- baselines/smoke-baseline.json

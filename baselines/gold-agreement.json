@@ -372,8 +372,8 @@
   },
   "resource_note": "managed dictionaries loaded (gitignored; see runner.py setup)",
   "source_sha256": {
-    "core/pt_dialect.py": "4bbe3566f0bdbdf4c747551b34dbfbcce579268d73d97cbbddb0b87eafde7698",
-    "core/wf_fidelity.py": "90847633bd48df3d0b0b4edfe0d8a32a87ccad53fef0b795545f86d3ddfddb2f",
+  "core/pt_dialect.py": "148e9e07a9dc603af06600876404c6ac050ed816d72cc38e6ac03ff399757e9a",
+  "core/wf_fidelity.py": "2449582fcf792b443efe308c1e1939d8b188625c0029bf9478849abba4bf04f1",
     "data/analysis_reference.jsonl": "413580dcb9a1dc0074291dc73bee8c41785d52163308e4792849887ce24199fb"
   },
   "suppression": {

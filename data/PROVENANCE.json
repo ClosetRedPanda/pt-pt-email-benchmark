@@ -20,12 +20,8 @@
     "data/calibration_dataset.jsonl": "84c1c5db9e42515a98dd64b71a8729b09b5c050b2941125e4af9fd1989b262ac",
     "data/elaboration_constraints.json": "cddcd677c4f63a44934e2040acc4d15f2cafaa70b781397341d732093e4bf1ec",
     "data/elaboration_prompts_pt_pt.json": "04c4c8cf78123636c2db17e7be7d481afeb448527f9b4617456d43fbe3307529",
-    "data/wq_calibration_candidates_human_verified.jsonl": "648ebc7a63b023c669edba1117d823d907fd009bf59688b071ac8753853731c7",
-    "data/wq_calibration_human_review.jsonl": "50e39b6bc526e82a3d10ca2b13fbc9e5ab102948aa32eb8d05c1ef1fd77defe5",
-    "data/wq_calibration_task7_human_verified.jsonl": "b05b02e156ee498fbeb22614521ef7a6932b7517dbc0d599553c33dcbad446d2",
     "data/wq_human_reference.jsonl": "f376580b014983d505e29b4f3382e7ee30d47a9875cbd4d320660af94e3ee8c9",
-    "data/wq_length_neutral_calibration.json": "bfcc50396a2ee4d1dc57ab721b5058a8ef427de9af650d80e233895cd8d55a2c",
-    "data/wq_rater_agreement_log.jsonl": "7e445a90292aaaa5ebd4c1d6e4032a4a43c658b7c8bd5a51aba6704edcddde56"
+    "data/wq_length_neutral_calibration.json": "bfcc50396a2ee4d1dc57ab721b5058a8ef427de9af650d80e233895cd8d55a2c"
   },
   "update_policy": "Any artifact change must update its SHA-256 and document generator, prompts, selection, and human review whenever those facts are available."
 }
