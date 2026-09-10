@@ -16,8 +16,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 
 from config import (
     OPENROUTER_COMPLETIONS_URL,

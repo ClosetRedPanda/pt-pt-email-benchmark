@@ -20,7 +20,16 @@ jobs:
           cache: pip
       - name: Install system dependencies
         run: |
-          sudo apt-get update
+          # Drop third-party runner apt sources (Chrome, Microsoft) and clear
+          # any stale index cache so a flaky dl.google.com/microsoft mirror
+          # cannot fail the update (see ci.yml).
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list \
+                     /etc/apt/sources.list.d/microsoft-*.list
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3 4 5; do
+            echo "apt-get update attempt ${attempt}/5"
+            sudo apt-get update && break || sleep 10
+          done
           sudo apt-get install -y --no-install-recommends build-essential default-jre
       - name: Install locked environment
         run: python -m pip install --require-hashes -r requirements.lock

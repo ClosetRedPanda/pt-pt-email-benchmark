@@ -17,7 +17,6 @@ Design constraints this follows:
 
 from __future__ import annotations
 
-import hashlib
 import shutil
 import sys
 import tempfile
@@ -26,6 +25,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
+
+from core._util import sha256_file
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -126,13 +127,6 @@ HUNSPELL_RESOURCES = (
 MANAGED_RESOURCES: Dict[str, ManagedResource] = {
     resource.key: resource for resource in (EUPTVID, *HUNSPELL_RESOURCES)
 }
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def verify(resource: ManagedResource) -> Optional[str]:

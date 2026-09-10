@@ -1,7 +1,6 @@
 """Result-artifact validation and provenance helpers."""
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from datetime import datetime, timezone
@@ -9,12 +8,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from core._util import sha256_file
+
 
 ARTIFACT_SCHEMA_VERSION = "1.0"
 MANIFEST_VERSION = "1.1"
 _NUMERIC_FIELDS = {
-    "latency_ms", "prompt_tokens", "completion_tokens", "reasoning_tokens",
-    "total_tokens", "cost_usd", "instruction_adherence_pct",
+    "latency_ms", "prompt_tokens", "completion_tokens",
+    "cost_usd", "instruction_adherence_pct",
     "semantic_preservation_pct", "euptvid_probability", "ptpt_compliance_pct",
     "ptpt_compliance_graded_pct",
     "wf_score", "writing_quality_score",
@@ -28,18 +29,6 @@ class ArtifactValidationError(ValueError):
 def manifest_path(result_path: Path) -> Path:
     """Return the sidecar path for a JSONL result artifact."""
     return result_path.with_suffix(".manifest.json")
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def sha256_bytes(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
 
 
 def _number_is_valid(value: Any) -> bool:

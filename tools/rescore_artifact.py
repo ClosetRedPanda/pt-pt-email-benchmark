@@ -13,10 +13,10 @@ if str(ROOT) not in sys.path:
 
 from compare import _full_rescore_generation_records
 from config import BENCHMARK_VERSION, ELABORATION_PROMPTS
+from core._util import sha256_file
 from core.artifacts import (
     ArtifactValidationError,
     build_manifest,
-    sha256_file,
     validate_rows,
     write_manifest,
 )

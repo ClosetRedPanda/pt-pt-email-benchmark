@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import random
 from statistics import mean, median
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
+
+from core._util import percentile
 
 
 DEFAULT_METRICS = (
@@ -35,19 +37,6 @@ def _number(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return number
-
-
-def _percentile(values: List[float], percentile: float) -> Optional[float]:
-    if not values:
-        return None
-    ordered = sorted(values)
-    if len(ordered) == 1:
-        return ordered[0]
-    position = (len(ordered) - 1) * percentile / 100.0
-    lower = int(position)
-    upper = min(lower + 1, len(ordered) - 1)
-    fraction = position - lower
-    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
 
 
 # Metrics whose published name differs from the per-row field they derive from.
@@ -122,8 +111,8 @@ def paired_bootstrap(
             "losses": sum(value < 0 for value in differences),
             "ties": sum(value == 0 for value in differences),
             "ci95": [
-                _percentile(bootstrap_means, 2.5),
-                _percentile(bootstrap_means, 97.5),
+                percentile(bootstrap_means, 2.5),
+                percentile(bootstrap_means, 97.5),
             ],
         }
     return report
