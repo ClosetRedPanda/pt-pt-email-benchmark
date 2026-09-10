@@ -392,6 +392,7 @@ def _persist_rescored(
     out_dir: Path,
     *,
     source_manifest: Optional[Dict[str, Any]] = None,
+    quiet: bool = False,
 ) -> Dict[str, Any]:
     """Write re-derived rows and a manifest to a new artifact; never touch the source.
 
@@ -414,7 +415,8 @@ def _persist_rescored(
         encoding="utf-8",
     )
     _stamp_rescored_manifest(destination, rows, source_manifest=source_manifest)
-    print(f"[rescore] persisted re-derived artifact: {destination}", file=sys.stderr)
+    if not quiet:
+        print(f"[rescore] persisted re-derived artifact: {destination}", file=sys.stderr)
     return destination
 
 
@@ -424,6 +426,7 @@ def validate_comparison_artifacts(
     kind: str,
     allow_legacy: bool = False,
     rescore: bool = False,
+    quiet: bool = False,
 ) -> List[Dict[str, Any]]:
     """Validate artifacts and ensure comparable manifest metadata.
 
@@ -477,13 +480,14 @@ def validate_comparison_artifacts(
                     "generation, or pass --rescore to re-derive every score (including adherence) from "
                     "stored content and stamp the result as a new artifact."
                 )
-            print(
-                f"[rescore] artifacts recorded under {versioned[0].get('benchmark_version')!r}; "
-                f"re-scoring every field with {BENCHMARK_VERSION!r} criteria. This is exploratory: the "
-                "sidecar still records the original run, and the numbers are not comparable with "
-                "artifacts produced under other criteria.",
-                file=sys.stderr,
-            )
+            if not quiet:
+                print(
+                    f"[rescore] artifacts recorded under {versioned[0].get('benchmark_version')!r}; "
+                    f"re-scoring every field with {BENCHMARK_VERSION!r} criteria. This is exploratory: the "
+                    "sidecar still records the original run, and the numbers are not comparable with "
+                    "artifacts produced under other criteria.",
+                    file=sys.stderr,
+                )
     return manifests
 
 
@@ -638,7 +642,7 @@ def _generation_reading_notes(summary: Dict[str, Any]) -> List[str]:
     return notes
 
 
-def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
+def _pretty_report(path: Path, summary: Dict[str, Any], kind: str, *, quiet: bool = False) -> str:
     rows = read_jsonl(path)
     model_names = sorted({str(row["model"]) for row in rows if row.get("model")})
     model = ", ".join(model_names) if model_names else "unknown model"
@@ -706,11 +710,13 @@ def _pretty_report(path: Path, summary: Dict[str, Any], kind: str) -> str:
         "=" * 72,
         f"{title}: {path.name}",
         f"  Model: {model}",
-        f"  Provenance: {summary.get('artifact_provenance', 'unknown')}",
+        *([] if quiet else [f"  Provenance: {summary.get('artifact_provenance', 'unknown')}"]),
         counts,
         "-" * 72,
         *_render_sections(sections),
     ]
+    if quiet:
+        return "\n".join(lines)
     if kind == "generation" and summary.get("languagetool_available") is False:
         lines.append("  Note: no LanguageTool backend responded, so grammar evidence was unavailable and")
         lines.append("        grammar_errors_per_email is reported as N/A (not as a measured zero).")
@@ -997,6 +1003,13 @@ def main() -> None:
         action="store_true",
         help="allow bare legacy JSONL artifacts for exploratory comparison",
     )
+    parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="terse human report: suppress stderr notices ([notice]/[rescore]/[warning]), "
+             "the Provenance line, reading notes, metric denominators, the resolution guard, "
+             "and the paired-uncertainty section (--json output is unaffected)",
+    )
     args = parser.parse_args()
     # A re-derivation is exactly the case that needs an interval: its point
     # estimates are noisier than a normal run's because the content was produced
@@ -1004,14 +1017,14 @@ def main() -> None:
     # bare numbers, which is how one-email differences came to be read as a
     # ranking. The section is forced back on; --json callers still get what they
     # asked for, since they can read the numbers programmatically.
-    if args.rescore and args.no_uncertainty and not args.json:
+    if args.rescore and args.no_uncertainty and not args.json and not args.quiet:
         print(
             "[notice] --rescore overrides --no-uncertainty: re-derived point estimates are "
             "reported with their paired bootstrap interval.",
             file=sys.stderr,
         )
         args.no_uncertainty = False
-    if args.rescore and not args.rescore_output:
+    if args.rescore and not args.rescore_output and not args.quiet:
         print(
             "[notice] reporting only: these numbers are re-derived, not run. To persist an "
             "auditable artifact (with inherited prompt provenance) pass --rescore-output DIR.",
@@ -1022,12 +1035,13 @@ def main() -> None:
         kind=args.kind,
         allow_legacy=args.allow_legacy or args.rescore,
         rescore=args.rescore,
+        quiet=args.quiet,
     )
     summaries = []
     scored_rows: List[List[Dict[str, Any]]] = []
     if args.kind == "generation":
         for path, manifest in zip(args.results, manifests):
-            if manifest.get("legacy") and not args.rescore:
+            if manifest.get("legacy") and not args.rescore and not args.quiet:
                 print(
                     f"[warning] {path.name}: legacy artifact with per-row values frozen at creation time. "
                     "Pass --rescore to re-evaluate stored content with the current evaluators.",
@@ -1042,7 +1056,7 @@ def main() -> None:
                 # stamped at the current version. Without the flag, the run stays
                 # exploratory and the original sidecar is untouched.
                 if args.rescore_output:
-                    _persist_rescored(path, rows, args.rescore_output, source_manifest=manifest)
+                    _persist_rescored(path, rows, args.rescore_output, source_manifest=manifest, quiet=args.quiet)
             scored_rows.append(rows)
             summary = build_elaboration_scorecard(rows)
             if args.rescore and manifest.get("legacy"):
@@ -1062,7 +1076,7 @@ def main() -> None:
             summary["artifact_provenance"] = provenance
             summaries.append(summary)
             if not args.json:
-                print(_pretty_report(path, summary, args.kind))
+                print(_pretty_report(path, summary, args.kind, quiet=args.quiet))
     else:
         truth = read_jsonl(ANALYSIS_REFERENCE)
         for path, manifest in zip(args.results, manifests):
@@ -1070,8 +1084,8 @@ def main() -> None:
             summary["artifact_provenance"] = "legacy exploratory" if manifest.get("legacy") else "manifest-backed"
             summaries.append(summary)
             if not args.json:
-                print(_pretty_report(path, summary, args.kind))
-    if not args.json and args.kind == "generation" and len(summaries) >= 2:
+                print(_pretty_report(path, summary, args.kind, quiet=args.quiet))
+    if not args.json and args.kind == "generation" and len(summaries) >= 2 and not args.quiet:
         # Printed once because it is a property of the *set*: whether these
         # artifacts differ by more than one quantisation unit is not answerable
         # per artifact.

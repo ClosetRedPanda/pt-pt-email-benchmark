@@ -310,6 +310,36 @@ def test_writing_metrics_appear_in_the_pretty_report(tmp_path):
 
 
 
+def test_quiet_report_hides_provenance_notes_and_denominators(tmp_path):
+    """`--quiet` collapses the report to the metric table only.
+
+    Everything the reliability work added to keep a number from being over-read
+    (Provenance, denominators, the reading notes, the LanguageTool/Hunspell
+    caveats) is hidden, while the metric sections and sample counts remain.
+    """
+    from compare import _pretty_report
+
+    summary = {
+        "samples": 20, "successful_samples": 20, "failed_samples": 0,
+        "instruction_adherence_pct": 60.0, "semantic_preservation_pct": 90.0,
+        "languagetool_available": False,
+        "artifact_provenance": "re-derived from stored content",
+        "denominators": {"instruction_adherence_pct": 20},
+    }
+    payload = tmp_path / "artifact.jsonl"
+    payload.write_text(json.dumps({"model": "test/report"}) + "\n", encoding="utf-8")
+    quiet = _pretty_report(payload, summary, "generation", quiet=True)
+    loud = _pretty_report(payload, summary, "generation")
+
+    assert "Instruction adherence" in quiet
+    assert "Samples: 20" in quiet
+    assert "Provenance" not in quiet
+    assert "denominators" not in quiet
+    assert "Note:" not in quiet
+    assert "Provenance" in loud
+    assert "Note:" in loud
+
+
 def test_ranking_key_list_covers_every_printed_generation_metric():
     """The guard must watch the same metrics the report shows, or it is decoration."""
     from compare import SECTION_LABELS  # noqa: F401  (import smoke)

@@ -133,7 +133,14 @@ python compare.py results/legacy_a.jsonl results/legacy_b.jsonl --kind generatio
 python compare.py results/model_a.jsonl results/model_b.jsonl --kind generation --rescore
 # Persist an exploratory rescore as a new manifest-backed artifact.
 python tools/rescore_artifact.py results/legacy.jsonl results/rescored.jsonl
+# Terse output: hide stderr notices, provenance, reading notes, denominators,
+# the resolution guard, and the paired-uncertainty section.
+python compare.py results/model_a.jsonl results/model_b.jsonl --kind generation --quiet
 ```
+
+`--quiet` only affects the human-readable report (and stderr notices); `--json`
+output is unchanged. Evaluator resource warnings (e.g. missing Hunspell
+dictionaries) are still printed, because those change what the numbers mean.
 
 New runner outputs write a sidecar `*.manifest.json` containing the result hash,
 benchmark/input/evaluator/resource hashes, run parameters, and command line.
